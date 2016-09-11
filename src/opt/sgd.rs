@@ -4,7 +4,7 @@ use opt::{OptWorker};
 use rw::{ReadBuffer, WriteBuffer, AccumulateBuffer};
 
 use std::cmp::{min};
-//use std::marker::{PhantomData};
+use std::marker::{PhantomData};
 
 //#[derive(Clone, Copy)]
 pub struct SgdOptConfig {
@@ -14,15 +14,16 @@ pub struct SgdOptConfig {
   pub momentum:         Option<f32>,
 }
 
-pub struct SgdOptWorker<T, Op> where Op: Operator<T> {
+pub struct SgdOptWorker<T, S, Op> where Op: Operator<T, S> { //, S: SampleCastAs<<Op as Operator<T, S>>::Sample> {
   cfg:      SgdOptConfig,
   operator: Op,
-  //cache:    Vec<<Op as Operator<T>>::Sample>,
+  cache:    Vec<S>,
   grad_acc: Vec<T>,
+  //_marker:  PhantomData<S>,
 }
 
-impl<Op> SgdOptWorker<f32, Op> where Op: Operator<f32> {
-  pub fn new(cfg: SgdOptConfig, operator: Op) -> SgdOptWorker<f32, Op> {
+impl<S, Op> SgdOptWorker<f32, S, Op> where Op: Operator<f32, S> { //, S: SampleCastAs<<Op as Operator<f32, S>>::Sample> {
+  pub fn new(cfg: SgdOptConfig, operator: Op) -> SgdOptWorker<f32, S, Op> {
     let batch_size = cfg.batch_size;
     let param_len = operator.param_len();
     let mut grad_acc = Vec::with_capacity(param_len);
@@ -32,13 +33,14 @@ impl<Op> SgdOptWorker<f32, Op> where Op: Operator<f32> {
     SgdOptWorker{
       cfg:      cfg,
       operator: operator,
-      //cache:    Vec::with_capacity(batch_size),
+      cache:    Vec::with_capacity(batch_size),
       grad_acc: grad_acc,
+      //_marker:  PhantomData,
     }
   }
 }
 
-impl<Op> OptWorker<f32, Op> for SgdOptWorker<f32, Op> where Op: Operator<f32> {
+impl<S, Op> OptWorker<f32, S, Op> for SgdOptWorker<f32, S, Op> where Op: Operator<f32, S> { //, S: SampleCastAs<<Op as Operator<f32, S>>::Sample> {
   fn init_param(&mut self) {
     self.operator.init_param();
   }
@@ -53,8 +55,9 @@ impl<Op> OptWorker<f32, Op> for SgdOptWorker<f32, Op> where Op: Operator<f32> {
   }
 
   //fn step(&mut self, samples: &mut Iterator<Item=<Op as Operator<f32>>::Sample>) {
-  fn step<S>(&mut self, samples: &mut Iterator<Item=S>)
-  where S: SampleCastAs<<Op as Operator<f32>>::Sample>
+  //fn step<S>(&mut self, samples: &mut Iterator<Item=S>)
+  //where S: SampleCastAs<<Op as Operator<f32>>::Sample>
+  fn step(&mut self, samples: &mut Iterator<Item=S>)
   {
     let mut cache = Vec::with_capacity(self.cfg.batch_size);
     let num_batches = (self.cfg.minibatch_size + self.cfg.batch_size - 1) / self.cfg.batch_size;
@@ -73,8 +76,9 @@ impl<Op> OptWorker<f32, Op> for SgdOptWorker<f32, Op> where Op: Operator<f32> {
   }
 
   //fn eval(&mut self, samples: &mut Iterator<Item=<Op as Operator<f32>>::Sample>) {
-  fn eval<S>(&mut self, samples: &mut Iterator<Item=S>)
-  where S: SampleCastAs<<Op as Operator<f32>>::Sample>
+  //fn eval<S>(&mut self, samples: &mut Iterator<Item=S>)
+  //where S: SampleCastAs<<Op as Operator<f32>>::Sample>
+  fn eval(&mut self, samples: &mut Iterator<Item=S>)
   {
   }
 }

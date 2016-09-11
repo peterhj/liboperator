@@ -1,7 +1,19 @@
 //use array::{Array2d, Array3d};
 
-pub trait SampleCastAs<Target=Self> {
+//use std::marker::{Reflect};
+
+pub trait SampleCastAs<Target=Self> { //: Reflect {
 }
+
+pub struct ClassSample<T> {
+  pub input:    Vec<T>,
+  pub label:    Option<u32>,
+  pub weight:   f32,
+}
+
+impl SampleCastAs for ClassSample<u8> {}
+impl SampleCastAs<ClassSample<f32>> for ClassSample<u8> {}
+impl SampleCastAs for ClassSample<f32> {}
 
 pub struct ClassSampleU8 {
   pub input:    Vec<u8>,
