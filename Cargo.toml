@@ -1,0 +1,12 @@
+[package]
+name = "operator"
+version = "0.1.0"
+authors = ["Peter Jin <peterhaijin@gmail.com>"]
+
+[lib]
+name = "operator"
+path = "src/lib.rs"
+
+[dependencies]
+rand = "*"
+array = { path = "../rembrandt-project/libarray" }
