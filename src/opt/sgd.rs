@@ -3,6 +3,7 @@ use data::{SampleCastAs};
 use opt::{OptWorker};
 use rw::{ReadBuffer, WriteBuffer, AccumulateBuffer};
 
+use rand::{Rng};
 use std::cmp::{min};
 use std::marker::{PhantomData};
 
@@ -41,8 +42,8 @@ impl<S, Op> SgdOptWorker<f32, S, Op> where Op: Operator<f32, S> { //, S: SampleC
 }
 
 impl<S, Op> OptWorker<f32, S, Op> for SgdOptWorker<f32, S, Op> where Op: Operator<f32, S> { //, S: SampleCastAs<<Op as Operator<f32, S>>::Sample> {
-  fn init_param(&mut self) {
-    self.operator.init_param();
+  fn init_param<R>(&mut self, rng: &mut R) where R: Rng {
+    self.operator.init_param(rng);
   }
 
   fn load_local_param(&mut self, param_reader: &mut ReadBuffer<f32>) {
@@ -71,8 +72,8 @@ impl<S, Op> OptWorker<f32, S, Op> for SgdOptWorker<f32, S, Op> where Op: Operato
       self.operator.forward(OpPhase::Learning);
       self.operator.backward();
     }
-    self.operator.accumulate_grad(self.cfg.step_size, 0.0, &mut self.grad_acc);
-    self.operator.update_param(1.0, 1.0, &mut self.grad_acc);
+    self.operator.accumulate_grad(self.cfg.step_size, 0.0, &mut self.grad_acc, 0);
+    self.operator.update_param(1.0, 1.0, &mut self.grad_acc, 0);
   }
 
   //fn eval(&mut self, samples: &mut Iterator<Item=<Op as Operator<f32>>::Sample>) {

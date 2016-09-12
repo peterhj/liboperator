@@ -1,11 +1,13 @@
-#![feature(conservative_impl_trait)]
+//#![feature(conservative_impl_trait)]
 //#![feature(reflect_marker)]
 
 extern crate array;
 extern crate rand;
 
 use data::{SampleCastAs};
-use rw::{ReadBuffer, WriteBuffer, AccumulateBuffer};
+use rw::{ReadBuffer, ReadAccumulateBuffer, WriteBuffer, AccumulateBuffer};
+
+use rand::{Rng};
 
 pub mod data;
 pub mod opt;
@@ -40,15 +42,15 @@ pub trait InternalOperator<T> {
 
   fn init_state(&mut self) {}
 
-  fn init_param(&mut self) {}
-  fn load_param(&mut self, _param_reader: &mut ReadBuffer<T>) {}
-  fn store_param(&mut self, _param_writer: &mut WriteBuffer<T>) {}
-  fn update_param(&mut self, _alpha: f32, _beta: f32, _grad_reader: &mut ReadBuffer<T>) {}
+  fn init_param<R>(&mut self, _rng: &mut R) where R: Rng {}
+  fn load_param(&mut self, _param_reader: &mut ReadBuffer<T>) -> usize { 0 }
+  fn store_param(&mut self, _param_writer: &mut WriteBuffer<T>) -> usize { 0 }
+  fn update_param(&mut self, _alpha: f32, _beta: f32, _grad_reader: &mut ReadAccumulateBuffer<T>, _offset: usize) -> usize { 0 }
 
   fn reset_grad(&mut self) {}
-  fn load_grad(&mut self, _grad_reader: &mut ReadBuffer<T>) {}
-  fn store_grad(&mut self, _grad_writer: &mut WriteBuffer<T>) {}
-  fn accumulate_grad(&mut self, _step_size: f32, _mu: f32, _grad_accum: &mut AccumulateBuffer<T>) {}
+  fn load_grad(&mut self, _grad_reader: &mut ReadBuffer<T>) -> usize { 0 }
+  fn store_grad(&mut self, _grad_writer: &mut WriteBuffer<T>) -> usize { 0 }
+  fn accumulate_grad(&mut self, _alpha: f32, _beta: f32, _grad_accum: &mut AccumulateBuffer<T>, _offset: usize) -> usize { 0 }
 
   fn forward(&mut self, phase: OpPhase);
   fn backward(&mut self);

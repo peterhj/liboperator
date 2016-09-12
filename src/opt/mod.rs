@@ -2,12 +2,12 @@ use super::{Operator};
 use data::{SampleCastAs};
 use rw::{ReadBuffer, WriteBuffer};
 
-//use rand::{Rng};
+use rand::{Rng};
 
 pub mod sgd;
 
 pub trait OptWorker<T, S, Op> where Op: Operator<T, S> { //, S: SampleCastAs<<Op as Operator<T, S>>::Sample> {
-  fn init_param(&mut self);
+  fn init_param<R>(&mut self, rng: &mut R) where R: Rng;
   fn load_local_param(&mut self, param_reader: &mut ReadBuffer<T>);
   fn store_local_param(&mut self, param_writer: &mut WriteBuffer<T>);
   fn store_global_param(&mut self, param_writer: &mut WriteBuffer<T>);
