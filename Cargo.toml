@@ -9,4 +9,4 @@ path = "src/lib.rs"
 
 [dependencies]
 rand = "*"
-array = { path = "../rembrandt-project/libarray" }
+#array = { path = "../rembrandt-project/libarray" }

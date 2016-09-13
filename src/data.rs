@@ -2,16 +2,16 @@
 
 //use std::marker::{Reflect};
 
-pub trait SampleCastAs<Target=Self> { //: Reflect {
-}
+/*pub trait SampleCastAs<Target=Self> { //: Reflect {
+}*/
 
 pub struct ClassSample<T> {
   pub input:    Vec<T>,
   pub label:    Option<u32>,
-  pub weight:   f32,
+  pub weight:   Option<f32>,
 }
 
-impl SampleCastAs for ClassSample<u8> {}
+/*impl SampleCastAs for ClassSample<u8> {}
 impl SampleCastAs<ClassSample<f32>> for ClassSample<u8> {}
 impl SampleCastAs for ClassSample<f32> {}
 
@@ -30,7 +30,7 @@ pub struct ClassSampleF32 {
   pub weight:   f32,
 }
 
-impl SampleCastAs for ClassSampleF32 {}
+impl SampleCastAs for ClassSampleF32 {}*/
 
 /*pub enum DynamicNdBuf<T> where T: Copy {
   Buf(Vec<T>),
