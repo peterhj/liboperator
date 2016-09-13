@@ -1,6 +1,9 @@
 extern crate rand;
+extern crate rng;
 
 use rw::{ReadBuffer, ReadAccumulateBuffer, WriteBuffer, AccumulateBuffer};
+
+use rng::xorshift::{Xorshiftplus128Rng};
 
 use rand::{Rng};
 
@@ -30,7 +33,7 @@ pub trait InternalOperator<T> {
 
   fn init_state(&mut self) {}
 
-  fn init_param<R>(&mut self, _rng: &mut R) where Self: Sized, R: Rng {}
+  fn init_param(&mut self, _rng: &mut Xorshiftplus128Rng) {}
   fn load_param(&mut self, _param_reader: &mut ReadBuffer<T>) -> usize { 0 }
   fn store_param(&mut self, _param_writer: &mut WriteBuffer<T>) -> usize { 0 }
   fn update_param(&mut self, _alpha: f32, _beta: f32, _grad_reader: &mut ReadAccumulateBuffer<T>, _offset: usize) -> usize { 0 }
