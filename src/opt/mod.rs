@@ -14,7 +14,7 @@ pub trait OptWorker<T, S, Op> where Op: Operator<T, S> {
   fn store_global_param(&mut self, param_writer: &mut WriteBuffer<T>);
 
   fn step(&mut self, samples: &mut Iterator<Item=S>);
-  fn eval(&mut self, samples: &mut Iterator<Item=S>);
+  fn eval(&mut self, epoch_size: usize, samples: &mut Iterator<Item=S>);
 }
 
 pub trait OptStats<St> {
