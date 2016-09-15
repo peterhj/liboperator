@@ -17,6 +17,11 @@ pub enum OpPhase {
   Learning,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub enum Regularization {
+  L2{lambda: f32},
+}
+
 pub trait Operator<T, S>: InternalOperator<T> {
   fn load_data(&mut self, samples: &[S]);
 }
@@ -41,7 +46,7 @@ pub trait InternalOperator<T> {
   fn reset_grad(&mut self) {}
   fn load_grad(&mut self, _grad_reader: &mut ReadBuffer<T>) -> usize { 0 }
   fn store_grad(&mut self, _grad_writer: &mut WriteBuffer<T>) -> usize { 0 }
-  fn apply_l2_reg(&mut self, _lambda: f32) {}
+  fn apply_grad_reg(&mut self, _reg: Regularization) {}
   fn accumulate_grad(&mut self, _alpha: f32, _beta: f32, _grad_accum: &mut AccumulateBuffer<T>, _offset: usize) -> usize { 0 }
 
   fn forward(&mut self, phase: OpPhase);

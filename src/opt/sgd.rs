@@ -1,4 +1,4 @@
-use super::super::{Operator, OpPhase};
+use super::super::{Operator, OpPhase, Regularization};
 use data::{WeightedSample};
 use opt::{OptWorker};
 use rw::{ReadBuffer, WriteBuffer, AccumulateBuffer};
@@ -73,14 +73,13 @@ impl<S, Op> OptWorker<f32, S, Op> for SgdOptWorker<f32, S, Op> where Op: Operato
       self.operator.backward();
     }
     if let Some(lambda) = self.cfg.l2_reg {
-      self.operator.apply_l2_reg(lambda);
+      self.operator.apply_grad_reg(Regularization::L2{lambda: lambda});
     }
     self.operator.accumulate_grad(-self.cfg.step_size, 0.0, &mut self.grad_acc, 0);
     self.operator.update_param(1.0, 1.0, &mut self.grad_acc, 0);
   }
 
   fn eval(&mut self, epoch_size: usize, samples: &mut Iterator<Item=S>) {
-    //let num_batches = (self.cfg.minibatch_sz + self.cfg.batch_sz - 1) / self.cfg.batch_sz;
     self.cache.clear();
     for mut sample in samples.take(epoch_size) {
       sample.multiply_weight(1.0 / epoch_size as f32);
