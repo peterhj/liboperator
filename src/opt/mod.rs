@@ -4,10 +4,11 @@ use rw::{ReadBuffer, WriteBuffer};
 use rng::xorshift::{Xorshiftplus128Rng};
 
 use rand::{Rng};
+//use std::rc::{Rc};
 
 pub mod sgd;
 
-pub trait OptWorker<T, S, Op> where Op: Operator<T, S> {
+pub trait OptWorker<T, S> {
   fn init_param(&mut self, rng: &mut Xorshiftplus128Rng);
   fn load_local_param(&mut self, param_reader: &mut ReadBuffer<T>);
   fn store_local_param(&mut self, param_writer: &mut WriteBuffer<T>);
@@ -17,18 +18,20 @@ pub trait OptWorker<T, S, Op> where Op: Operator<T, S> {
   fn eval(&mut self, epoch_size: usize, samples: &mut Iterator<Item=S>);
 }
 
-pub trait OptStats<St> {
-  fn reset_stats(&mut self, stats: &mut St);
-  fn get_stats(&mut self, stats: &mut St);
+pub trait OptStats<Stats> {
+  fn reset_opt_stats(&mut self);
+  fn get_opt_stats(&self) -> &Stats;
 }
 
-pub struct ClassStats {
+#[derive(Clone, Default, Debug)]
+pub struct ClassOptStats {
   pub sample_count:     usize,
   pub correct_count:    usize,
-  pub accuracy:         f32,
+  //pub accuracy:         f32,
   pub avg_loss:         f32,
 }
 
-pub struct RegressStats {
+#[derive(Clone, Default, Debug)]
+pub struct RegressOptStats {
   pub avg_loss:         f32,
 }

@@ -1,13 +1,15 @@
 use super::super::{Operator, OpPhase, Regularization};
-use data::{WeightedSample};
-use opt::{OptWorker};
+use data::{SampleWeight, WeightedSample};
+use opt::{OptWorker, OptStats, ClassOptStats};
 use rw::{ReadBuffer, WriteBuffer, AccumulateBuffer};
 
+use densearray::{Reshape, ReshapeMut};
 use rng::xorshift::{Xorshiftplus128Rng};
 
 use rand::{Rng};
 use std::cmp::{min};
 use std::marker::{PhantomData};
+//use std::rc::{Rc};
 
 #[derive(Clone, Copy)]
 pub struct SgdOptConfig {
@@ -22,14 +24,26 @@ pub struct SgdOptWorker<T, S, Op> where Op: Operator<T, S> {
   cfg:      SgdOptConfig,
   operator: Op,
   cache:    Vec<S>,
-  grad_acc: Vec<T>,
+  param_sz: usize,
+  param_saved:  Vec<T>,
+  grad_cur:     Vec<T>,
+  grad_acc:     Vec<T>,
   //_marker:  PhantomData<S>,
+  stats:    ClassOptStats,
 }
 
 impl<S, Op> SgdOptWorker<f32, S, Op> where Op: Operator<f32, S> {
   pub fn new(cfg: SgdOptConfig, operator: Op) -> SgdOptWorker<f32, S, Op> {
     let batch_sz = cfg.batch_sz;
     let param_len = operator.param_len();
+    let mut param_saved = Vec::with_capacity(param_len);
+    for _ in 0 .. param_len {
+      param_saved.push(0.0);
+    }
+    let mut grad_cur = Vec::with_capacity(param_len);
+    for _ in 0 .. param_len {
+      grad_cur.push(0.0);
+    }
     let mut grad_acc = Vec::with_capacity(param_len);
     for _ in 0 .. param_len {
       grad_acc.push(0.0);
@@ -38,15 +52,20 @@ impl<S, Op> SgdOptWorker<f32, S, Op> where Op: Operator<f32, S> {
       cfg:      cfg,
       operator: operator,
       cache:    Vec::with_capacity(batch_sz),
-      grad_acc: grad_acc,
+      param_sz: param_len,
+      param_saved:  param_saved,
+      grad_cur:     grad_cur,
+      grad_acc:     grad_acc,
       //_marker:  PhantomData,
+      stats:    Default::default(),
     }
   }
 }
 
-impl<S, Op> OptWorker<f32, S, Op> for SgdOptWorker<f32, S, Op> where Op: Operator<f32, S>, S: WeightedSample {
+impl<S, Op> OptWorker<f32, S> for SgdOptWorker<f32, S, Op> where Op: Operator<f32, S>, S: SampleWeight {
   fn init_param(&mut self, rng: &mut Xorshiftplus128Rng) {
     self.operator.init_param(rng);
+    self.operator.store_param(&mut self.param_saved, 0);
   }
 
   fn load_local_param(&mut self, param_reader: &mut ReadBuffer<f32>) {
@@ -59,13 +78,17 @@ impl<S, Op> OptWorker<f32, S, Op> for SgdOptWorker<f32, S, Op> where Op: Operato
   }
 
   fn step(&mut self, samples: &mut Iterator<Item=S>) {
+    self.operator.reset_loss();
     self.operator.reset_grad();
     let num_batches = (self.cfg.minibatch_sz + self.cfg.batch_sz - 1) / self.cfg.batch_sz;
+    if let Some(mu) = self.cfg.momentum {
+      self.operator.update_param(mu, 1.0, &mut self.grad_acc, 0);
+    }
     for batch in 0 .. num_batches {
       let actual_batch_sz = min((batch+1) * self.cfg.batch_sz, self.cfg.minibatch_sz) - batch * self.cfg.batch_sz;
       self.cache.clear();
       for mut sample in samples.take(actual_batch_sz) {
-        sample.multiply_weight(1.0 / self.cfg.minibatch_sz as f32);
+        sample.mix_weight(1.0 / self.cfg.minibatch_sz as f32);
         self.cache.push(sample);
       }
       self.operator.load_data(&self.cache);
@@ -75,14 +98,29 @@ impl<S, Op> OptWorker<f32, S, Op> for SgdOptWorker<f32, S, Op> where Op: Operato
     if let Some(lambda) = self.cfg.l2_reg {
       self.operator.apply_grad_reg(Regularization::L2{lambda: lambda});
     }
-    self.operator.accumulate_grad(-self.cfg.step_size, 0.0, &mut self.grad_acc, 0);
+    if let Some(_) = self.cfg.momentum {
+      self.operator.load_param(&mut self.param_saved, 0);
+    }
+    /*self.operator.accumulate_grad(-self.cfg.step_size, 0.0, &mut self.grad_acc, 0);
+    self.operator.update_param(1.0, 1.0, &mut self.grad_acc, 0);*/
+    self.operator.store_grad(&mut self.grad_cur, 0);
+    if let Some(mu) = self.cfg.momentum {
+      self.grad_acc.reshape_mut(self.param_sz).vector_scale(mu);
+    } else {
+      self.grad_acc.reshape_mut(self.param_sz).set_constant(0.0);
+    }
+    self.grad_acc.reshape_mut(self.param_sz).vector_add(-self.cfg.step_size, self.grad_cur.reshape(self.param_sz));
     self.operator.update_param(1.0, 1.0, &mut self.grad_acc, 0);
+    self.operator.store_param(&mut self.param_saved, 0);
+    self.stats.sample_count += self.cfg.minibatch_sz;
+    self.stats.avg_loss += self.operator.store_loss();
   }
 
-  fn eval(&mut self, epoch_size: usize, samples: &mut Iterator<Item=S>) {
+  fn eval(&mut self, epoch_sz: usize, samples: &mut Iterator<Item=S>) {
     self.cache.clear();
-    for mut sample in samples.take(epoch_size) {
-      sample.multiply_weight(1.0 / epoch_size as f32);
+    self.operator.reset_loss();
+    for mut sample in samples.take(epoch_sz) {
+      sample.mix_weight(1.0 / epoch_sz as f32);
       self.cache.push(sample);
       if self.cache.len() == self.cfg.batch_sz {
         self.operator.load_data(&self.cache);
@@ -94,5 +132,20 @@ impl<S, Op> OptWorker<f32, S, Op> for SgdOptWorker<f32, S, Op> where Op: Operato
       self.operator.load_data(&self.cache);
       self.operator.forward(OpPhase::Inference);
     }
+    self.stats.sample_count += epoch_sz;
+    self.stats.avg_loss += self.operator.store_loss();
+  }
+}
+
+impl<S, Op> OptStats<ClassOptStats> for SgdOptWorker<f32, S, Op> where Op: Operator<f32, S>, S: SampleWeight {
+  fn reset_opt_stats(&mut self) {
+    self.stats.sample_count = 0;
+    self.stats.correct_count = 0;
+    //self.stats.accuracy = 0.0;
+    self.stats.avg_loss = 0.0;
+  }
+
+  fn get_opt_stats(&self) -> &ClassOptStats {
+    &self.stats
   }
 }

@@ -1,5 +1,7 @@
-extern crate rand;
+extern crate densearray;
 extern crate rng;
+
+extern crate rand;
 
 use rw::{ReadBuffer, ReadAccumulateBuffer, WriteBuffer, AccumulateBuffer};
 
@@ -10,6 +12,40 @@ use rand::{Rng};
 pub mod data;
 pub mod opt;
 pub mod rw;
+
+#[derive(Clone, Copy)]
+pub enum OpCapability {
+  Forward,
+  Backward,
+  RForward,
+  RBackward,
+}
+
+impl OpCapability {
+  pub fn enable_backward(&self) -> bool {
+    match *self {
+      OpCapability::Forward => false,
+      _ => true,
+    }
+  }
+
+  pub fn enable_r_forward(&self) -> bool {
+    match *self {
+      OpCapability::Forward => false,
+      OpCapability::Backward => false,
+      _ => true,
+    }
+  }
+
+  pub fn enable_r_backward(&self) -> bool {
+    match *self {
+      OpCapability::Forward => false,
+      OpCapability::Backward => false,
+      OpCapability::RForward => false,
+      _ => true,
+    }
+  }
+}
 
 #[derive(Clone, Copy, Debug)]
 pub enum OpPhase {
@@ -28,7 +64,7 @@ pub trait Operator<T, S>: InternalOperator<T> {
 }
 
 pub trait InternalOperator<T> {
-  type Output: Clone;
+  type Output;
 
   fn output(&self, arm: usize) -> Self::Output;
   fn param_len(&self) -> usize { 0 }

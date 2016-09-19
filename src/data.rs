@@ -5,16 +5,29 @@
 /*pub trait SampleCastAs<Target=Self> { //: Reflect {
 }*/
 
+pub trait SampleInput<T> {
+  fn input(&self) -> &[T];
+}
+
+pub trait SampleClass {
+  fn class(&self) -> Option<u32>;
+}
+
+pub trait SampleWeight {
+  fn weight(&self) -> Option<f32>;
+  fn mix_weight(&mut self, w: f32);
+}
+
 pub trait WeightedSample {
   fn set_weight(&mut self, weight: f32);
   fn multiply_weight(&mut self, weight: f32);
 }
 
-pub struct ClassSample<T> {
+/*pub struct ClassSample<T> {
   pub input:    Vec<T>,
   pub label:    Option<u32>,
   pub weight:   Option<f32>,
-}
+}*/
 
 /*impl SampleCastAs for ClassSample<u8> {}
 impl SampleCastAs<ClassSample<f32>> for ClassSample<u8> {}

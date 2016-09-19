@@ -10,4 +10,5 @@ path = "src/lib.rs"
 [dependencies]
 rand = "*"
 #array = { path = "../rembrandt-project/libarray" }
+densearray = { path = "../libdensearray" }
 rng = { path = "../librng" }
