@@ -11,6 +11,7 @@ use rand::{Rng};
 
 pub mod data;
 pub mod opt;
+pub mod prelude;
 pub mod rw;
 
 #[derive(Clone, Copy)]
