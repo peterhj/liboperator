@@ -56,15 +56,15 @@ pub enum OpPhase {
 
 #[derive(Clone, Copy, Debug)]
 pub enum Regularization {
-  L2{lambda: f32},
+  L2(f32),
 }
 
-pub trait Operator<T, S>: InternalOperator<T> {
+pub trait Operator<T, S>: DiffOperator<T> {
   fn load_data(&mut self, samples: &[S]);
   fn store_loss(&mut self) -> f32 { unimplemented!(); }
 }
 
-pub trait InternalOperator<T> {
+pub trait DiffOperator<T> {
   type Output;
 
   fn output(&self, arm: usize) -> Self::Output;

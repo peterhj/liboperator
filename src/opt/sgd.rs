@@ -1,6 +1,6 @@
-use super::super::{Operator, OpPhase, Regularization};
-use data::{SampleWeight, WeightedSample};
-use opt::{OptWorker, OptStats, ClassOptStats};
+use prelude::*;
+use data::{SampleWeight};
+use opt::{ClassOptStats};
 use rw::{ReadBuffer, WriteBuffer, AccumulateBuffer};
 
 use densearray::{Reshape, ReshapeMut};
@@ -96,7 +96,7 @@ impl<S, Op> OptWorker<f32, S> for SgdOptWorker<f32, S, Op> where Op: Operator<f3
       self.operator.backward();
     }
     if let Some(lambda) = self.cfg.l2_reg {
-      self.operator.apply_grad_reg(Regularization::L2{lambda: lambda});
+      self.operator.apply_grad_reg(Regularization::L2(lambda));
     }
     if let Some(_) = self.cfg.momentum {
       self.operator.load_param(&mut self.param_saved, 0);
