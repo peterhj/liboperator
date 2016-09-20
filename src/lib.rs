@@ -10,6 +10,7 @@ use rng::xorshift::{Xorshiftplus128Rng};
 use rand::{Rng};
 
 pub mod data;
+pub mod memory;
 pub mod opt;
 pub mod prelude;
 pub mod rw;
