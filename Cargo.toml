@@ -8,8 +8,7 @@ name = "operator"
 path = "src/lib.rs"
 
 [dependencies]
-memmap = "*"
 rand = "*"
-#array = { path = "../rembrandt-project/libarray" }
 densearray = { path = "../libdensearray" }
+#sharedmem = { path = "../libsharedmem" }
 rng = { path = "../librng" }
