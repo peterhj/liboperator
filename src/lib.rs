@@ -1,6 +1,7 @@
 extern crate densearray;
 extern crate rng;
 
+extern crate memmap;
 extern crate rand;
 
 use rw::{ReadBuffer, ReadAccumulateBuffer, WriteBuffer, AccumulateBuffer};
