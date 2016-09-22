@@ -60,8 +60,9 @@ pub enum Regularization {
 }
 
 pub trait Operator<T, S>: DiffOperator<T> {
+//pub trait DiffOperatorInput<T, S>: DiffOperator<T> {
   fn load_data(&mut self, samples: &[S]);
-  fn store_loss(&mut self) -> f32 { unimplemented!(); }
+  //fn store_loss(&mut self) -> f32 { unimplemented!(); }
 }
 
 pub trait DiffOperator<T> {
@@ -81,16 +82,24 @@ pub trait DiffOperator<T> {
   fn store_param(&mut self, _param_writer: &mut WriteBuffer<T>, _offset: usize) -> usize { 0 }
   fn update_param(&mut self, _alpha: f32, _beta: f32, _grad_reader: &mut ReadAccumulateBuffer<T>, _offset: usize) -> usize { 0 }
 
-  fn reset_loss(&mut self) {}
-
   fn reset_grad(&mut self) {}
   fn load_grad(&mut self, _grad_reader: &mut ReadBuffer<T>, _offset: usize) -> usize { 0 }
   fn store_grad(&mut self, _grad_writer: &mut WriteBuffer<T>, _offset: usize) -> usize { 0 }
-  fn apply_grad_reg(&mut self, _reg: Regularization) {}
   fn accumulate_grad(&mut self, _alpha: f32, _beta: f32, _grad_accum: &mut AccumulateBuffer<T>, _offset: usize) -> usize { 0 }
+
+  fn reset_loss(&mut self) {}
+  fn store_loss(&mut self) -> f32 { 0.0 }
+  fn add_loss(&mut self, extra_loss: f32) { unimplemented!(); }
+
+  fn apply_grad_reg(&mut self, _reg: Regularization) {}
+  //fn apply_reg(&mut self, _reg: Regularization) {}
 
   fn forward(&mut self, phase: OpPhase);
   fn backward(&mut self);
   fn r_forward(&mut self) { unimplemented!(); }
   fn r_backward(&mut self) { unimplemented!(); }
+}
+
+pub trait DiffOperatorOutput<T, U>: DiffOperator<T> {
+  fn get_output(&mut self) -> &[U];
 }

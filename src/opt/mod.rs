@@ -4,7 +4,6 @@ use rw::{ReadBuffer, WriteBuffer};
 use rng::xorshift::{Xorshiftplus128Rng};
 
 use rand::{Rng};
-//use std::rc::{Rc};
 
 pub mod sgd;
 
@@ -27,8 +26,13 @@ pub trait OptStats<Stats> {
 pub struct ClassOptStats {
   pub sample_count:     usize,
   pub correct_count:    usize,
-  //pub accuracy:         f32,
   pub avg_loss:         f32,
+}
+
+impl ClassOptStats {
+  pub fn accuracy(&self) -> f32 {
+    self.correct_count as f32 / self.sample_count as f32
+  }
 }
 
 #[derive(Clone, Default, Debug)]
