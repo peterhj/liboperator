@@ -8,6 +8,8 @@ use rw::{ReadBuffer, ReadAccumulateBuffer, WriteBuffer, AccumulateBuffer};
 use rng::xorshift::{Xorshiftplus128Rng};
 
 use rand::{Rng};
+use std::io::{Read, Write};
+use std::ops::{Deref};
 
 pub mod data;
 pub mod opt;
@@ -59,18 +61,17 @@ pub enum Regularization {
   L2(f32),
 }
 
-pub trait Operator<T, S>: DiffOperator<T> {
-//pub trait DiffOperatorInput<T, S>: DiffOperator<T> {
-  fn load_data(&mut self, samples: &[S]);
-  //fn store_loss(&mut self) -> f32 { unimplemented!(); }
-}
-
 pub trait DiffOperator<T> {
   type Output;
 
-  fn output(&self, arm: usize) -> Self::Output;
-  fn param_len(&self) -> usize { 0 }
-  //fn grad_len(&self) -> usize;
+  fn _output(&self, arm: usize) -> Self::Output;
+
+  #[deprecated] fn param_len(&self) -> usize { 0 }
+  fn diff_param_sz(&self) -> usize { 0 }
+  fn nondiff_param_sz(&self) -> usize { 0 }
+  fn total_param_sz(&self) -> usize {
+    self.diff_param_sz() + self.nondiff_param_sz()
+  }
 
   fn save_rng_state(&mut self) {}
   fn restore_rng_state(&mut self) {}
@@ -86,10 +87,11 @@ pub trait DiffOperator<T> {
   fn load_grad(&mut self, _grad_reader: &mut ReadBuffer<T>, _offset: usize) -> usize { 0 }
   fn store_grad(&mut self, _grad_writer: &mut WriteBuffer<T>, _offset: usize) -> usize { 0 }
   fn accumulate_grad(&mut self, _alpha: f32, _beta: f32, _grad_accum: &mut AccumulateBuffer<T>, _offset: usize) -> usize { 0 }
+  fn grad_step(&mut self, _alpha: f32, _beta: f32) {}
 
   fn reset_loss(&mut self) {}
   fn store_loss(&mut self) -> f32 { 0.0 }
-  fn add_loss(&mut self, extra_loss: f32) { unimplemented!(); }
+  fn add_loss(&mut self, _extra_loss: f32) { unimplemented!(); }
 
   fn apply_grad_reg(&mut self, _reg: Regularization) {}
   //fn apply_reg(&mut self, _reg: Regularization) {}
@@ -100,6 +102,21 @@ pub trait DiffOperator<T> {
   fn r_backward(&mut self) { unimplemented!(); }
 }
 
+pub trait DiffOperatorInput<T, S>: DiffOperator<T> {
+  fn load_data(&mut self, samples: &[S]);
+}
+
 pub trait DiffOperatorOutput<T, U>: DiffOperator<T> {
-  fn get_output(&mut self) -> &[U];
+  fn get_output(&mut self) -> U;
+}
+
+pub trait DiffOperatorIo<T, S, U>: DiffOperatorInput<T, S> + DiffOperatorOutput<T, U> {
+}
+
+pub trait CheckpointFormat {
+}
+
+pub trait DiffOperatorCheckpoint<Format> where Format: CheckpointFormat {
+  fn decode(reader: &mut Read) -> Result<Self, ()> where Self: Sized;
+  fn encode(&mut self, writer: &mut Write) -> Result<(), ()>;
 }

@@ -1,9 +1,10 @@
-use super::{Operator};
+use super::{CheckpointFormat};
 use rw::{ReadBuffer, WriteBuffer};
 
 use rng::xorshift::{Xorshiftplus128Rng};
 
 use rand::{Rng};
+use std::path::{Path};
 
 pub mod sgd;
 
@@ -15,6 +16,11 @@ pub trait OptWorker<T, S> {
 
   fn step(&mut self, samples: &mut Iterator<Item=S>);
   fn eval(&mut self, epoch_size: usize, samples: &mut Iterator<Item=S>);
+}
+
+pub trait OptCheckpoint<Format> where Format: CheckpointFormat {
+  fn save_checkpoint(&mut self, path: &Path) -> Result<(), ()>;
+  fn restore_checkpoint(&mut self, path: &Path) -> Result<(), ()>;
 }
 
 pub trait OptStats<Stats> {

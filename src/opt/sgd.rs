@@ -20,7 +20,7 @@ pub struct SgdOptConfig {
   pub l2_reg:       Option<f32>,
 }
 
-pub struct SgdOptWorker<T, S, Op> where Op: Operator<T, S> {
+pub struct SgdOptWorker<T, S, Op> where Op: DiffOperatorInput<T, S> {
   cfg:      SgdOptConfig,
   operator: Op,
   cache:    Vec<S>,
@@ -29,10 +29,11 @@ pub struct SgdOptWorker<T, S, Op> where Op: Operator<T, S> {
   grad_cur:     Vec<T>,
   grad_acc:     Vec<T>,
   //_marker:  PhantomData<S>,
+  stats_it: usize,
   stats:    ClassOptStats,
 }
 
-impl<S, Op> SgdOptWorker<f32, S, Op> where Op: Operator<f32, S> {
+impl<S, Op> SgdOptWorker<f32, S, Op> where Op: DiffOperatorInput<f32, S> {
   pub fn new(cfg: SgdOptConfig, operator: Op) -> SgdOptWorker<f32, S, Op> {
     let batch_sz = cfg.batch_sz;
     let param_len = operator.param_len();
@@ -57,12 +58,13 @@ impl<S, Op> SgdOptWorker<f32, S, Op> where Op: Operator<f32, S> {
       grad_cur:     grad_cur,
       grad_acc:     grad_acc,
       //_marker:  PhantomData,
+      stats_it: 0,
       stats:    Default::default(),
     }
   }
 }
 
-impl<S, Op> OptWorker<f32, S> for SgdOptWorker<f32, S, Op> where Op: Operator<f32, S>, S: SampleWeight {
+impl<S, Op> OptWorker<f32, S> for SgdOptWorker<f32, S, Op> where Op: DiffOperatorInput<f32, S>, S: SampleWeight {
   fn init_param(&mut self, rng: &mut Xorshiftplus128Rng) {
     self.operator.init_param(rng);
     self.operator.store_param(&mut self.param_saved, 0);
@@ -112,8 +114,9 @@ impl<S, Op> OptWorker<f32, S> for SgdOptWorker<f32, S, Op> where Op: Operator<f3
     self.grad_acc.reshape_mut(self.param_sz).vector_add(-self.cfg.step_size, self.grad_cur.reshape(self.param_sz));
     self.operator.update_param(1.0, 1.0, &mut self.grad_acc, 0);
     self.operator.store_param(&mut self.param_saved, 0);
+    self.stats_it += 1;
     self.stats.sample_count += self.cfg.minibatch_sz;
-    self.stats.avg_loss += self.operator.store_loss();
+    self.stats.avg_loss += 1.0 / (self.stats_it as f32) * (self.operator.store_loss() - self.stats.avg_loss);
   }
 
   fn eval(&mut self, epoch_sz: usize, samples: &mut Iterator<Item=S>) {
@@ -132,16 +135,17 @@ impl<S, Op> OptWorker<f32, S> for SgdOptWorker<f32, S, Op> where Op: Operator<f3
       self.operator.load_data(&self.cache);
       self.operator.forward(OpPhase::Inference);
     }
+    self.stats_it += 1;
     self.stats.sample_count += epoch_sz;
-    self.stats.avg_loss += self.operator.store_loss();
+    self.stats.avg_loss += 1.0 / (self.stats_it as f32) * (self.operator.store_loss() - self.stats.avg_loss);
   }
 }
 
-impl<S, Op> OptStats<ClassOptStats> for SgdOptWorker<f32, S, Op> where Op: Operator<f32, S>, S: SampleWeight {
+impl<S, Op> OptStats<ClassOptStats> for SgdOptWorker<f32, S, Op> where Op: DiffOperatorInput<f32, S>, S: SampleWeight {
   fn reset_opt_stats(&mut self) {
+    self.stats_it = 0;
     self.stats.sample_count = 0;
     self.stats.correct_count = 0;
-    //self.stats.accuracy = 0.0;
     self.stats.avg_loss = 0.0;
   }
 
