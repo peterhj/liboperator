@@ -1,11 +1,8 @@
 extern crate densearray;
-extern crate rng;
 
 extern crate rand;
 
 use rw::{ReadBuffer, ReadAccumulateBuffer, WriteBuffer, AccumulateBuffer};
-
-use rng::xorshift::{Xorshiftplus128Rng};
 
 use rand::{Rng};
 use std::io::{Read, Write};
@@ -63,6 +60,7 @@ pub enum Regularization {
 
 pub trait DiffOperator<T> {
   type Output;
+  type Rng: Rng;
 
   fn _output(&self, arm: usize) -> Self::Output;
 
@@ -75,17 +73,19 @@ pub trait DiffOperator<T> {
 
   fn save_rng_state(&mut self) {}
   fn restore_rng_state(&mut self) {}
+  fn store_rng_state(&mut self, _rng_state: &mut Write) {}
+  fn load_rng_state(&mut self, _rng_state: &mut Read) {}
 
   //fn init_state(&mut self) {}
 
-  fn init_param(&mut self, _rng: &mut Xorshiftplus128Rng) {}
-  fn load_param(&mut self, _param_reader: &mut ReadBuffer<T>, _offset: usize) -> usize { 0 }
+  fn init_param(&mut self, _rng: &mut Self::Rng) {}
   fn store_param(&mut self, _param_writer: &mut WriteBuffer<T>, _offset: usize) -> usize { 0 }
+  fn load_param(&mut self, _param_reader: &mut ReadBuffer<T>, _offset: usize) -> usize { 0 }
   fn update_param(&mut self, _alpha: f32, _beta: f32, _grad_reader: &mut ReadAccumulateBuffer<T>, _offset: usize) -> usize { 0 }
 
   fn reset_grad(&mut self) {}
-  fn load_grad(&mut self, _grad_reader: &mut ReadBuffer<T>, _offset: usize) -> usize { 0 }
   fn store_grad(&mut self, _grad_writer: &mut WriteBuffer<T>, _offset: usize) -> usize { 0 }
+  fn load_grad(&mut self, _grad_reader: &mut ReadBuffer<T>, _offset: usize) -> usize { 0 }
   fn accumulate_grad(&mut self, _alpha: f32, _beta: f32, _grad_accum: &mut AccumulateBuffer<T>, _offset: usize) -> usize { 0 }
   fn grad_step(&mut self, _alpha: f32, _beta: f32) {}
 

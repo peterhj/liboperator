@@ -4,7 +4,7 @@ use opt::{ClassOptStats};
 use rw::{ReadBuffer, WriteBuffer, AccumulateBuffer};
 
 use densearray::{Reshape, ReshapeMut};
-use rng::xorshift::{Xorshiftplus128Rng};
+//use rng::xorshift::{Xorshiftplus128Rng};
 
 use rand::{Rng};
 use std::cmp::{min};
@@ -20,7 +20,7 @@ pub struct SgdOptConfig {
   pub l2_reg:       Option<f32>,
 }
 
-pub struct SgdOptWorker<T, S, Op> where Op: DiffOperatorInput<T, S> {
+pub struct SgdOptWorker<T, S, R, Op> where R: Rng, Op: DiffOperatorInput<T, S> {
   cfg:      SgdOptConfig,
   operator: Op,
   cache:    Vec<S>,
@@ -28,13 +28,13 @@ pub struct SgdOptWorker<T, S, Op> where Op: DiffOperatorInput<T, S> {
   param_saved:  Vec<T>,
   grad_cur:     Vec<T>,
   grad_acc:     Vec<T>,
-  //_marker:  PhantomData<S>,
   stats_it: usize,
   stats:    ClassOptStats,
+  _marker:  PhantomData<R>,
 }
 
-impl<S, Op> SgdOptWorker<f32, S, Op> where Op: DiffOperatorInput<f32, S> {
-  pub fn new(cfg: SgdOptConfig, operator: Op) -> SgdOptWorker<f32, S, Op> {
+impl<S, R, Op> SgdOptWorker<f32, S, R, Op> where R: Rng, Op: DiffOperatorInput<f32, S, Rng=R> {
+  pub fn new(cfg: SgdOptConfig, operator: Op) -> SgdOptWorker<f32, S, R, Op> {
     let batch_sz = cfg.batch_sz;
     let param_len = operator.param_len();
     let mut param_saved = Vec::with_capacity(param_len);
@@ -57,15 +57,17 @@ impl<S, Op> SgdOptWorker<f32, S, Op> where Op: DiffOperatorInput<f32, S> {
       param_saved:  param_saved,
       grad_cur:     grad_cur,
       grad_acc:     grad_acc,
-      //_marker:  PhantomData,
       stats_it: 0,
       stats:    Default::default(),
+      _marker:  PhantomData,
     }
   }
 }
 
-impl<S, Op> OptWorker<f32, S> for SgdOptWorker<f32, S, Op> where Op: DiffOperatorInput<f32, S>, S: SampleWeight {
-  fn init_param(&mut self, rng: &mut Xorshiftplus128Rng) {
+impl<S, R, Op> OptWorker<f32, S> for SgdOptWorker<f32, S, R, Op> where S: SampleWeight, R: Rng, Op: DiffOperatorInput<f32, S, Rng=R> {
+  type Rng = R;
+
+  fn init_param(&mut self, rng: &mut Op::Rng) {
     self.operator.init_param(rng);
     self.operator.store_param(&mut self.param_saved, 0);
   }
@@ -141,7 +143,7 @@ impl<S, Op> OptWorker<f32, S> for SgdOptWorker<f32, S, Op> where Op: DiffOperato
   }
 }
 
-impl<S, Op> OptStats<ClassOptStats> for SgdOptWorker<f32, S, Op> where Op: DiffOperatorInput<f32, S>, S: SampleWeight {
+impl<S, R, Op> OptStats<ClassOptStats> for SgdOptWorker<f32, S, R, Op> where S: SampleWeight, R: Rng, Op: DiffOperatorInput<f32, S> {
   fn reset_opt_stats(&mut self) {
     self.stats_it = 0;
     self.stats.sample_count = 0;

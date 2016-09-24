@@ -1,7 +1,7 @@
 use super::{CheckpointFormat};
 use rw::{ReadBuffer, WriteBuffer};
 
-use rng::xorshift::{Xorshiftplus128Rng};
+//use rng::xorshift::{Xorshiftplus128Rng};
 
 use rand::{Rng};
 use std::path::{Path};
@@ -9,7 +9,10 @@ use std::path::{Path};
 pub mod sgd;
 
 pub trait OptWorker<T, S> {
-  fn init_param(&mut self, rng: &mut Xorshiftplus128Rng);
+  type Rng: Rng;
+
+  //fn init_param(&mut self, rng: &mut Xorshiftplus128Rng);
+  fn init_param(&mut self, rng: &mut Self::Rng);
   fn load_local_param(&mut self, param_reader: &mut ReadBuffer<T>);
   fn store_local_param(&mut self, param_writer: &mut WriteBuffer<T>);
   fn store_global_param(&mut self, param_writer: &mut WriteBuffer<T>);
