@@ -6,7 +6,16 @@ use rw::{ReadBuffer, WriteBuffer};
 use rand::{Rng};
 use std::path::{Path};
 
+pub mod grad;
 pub mod sgd;
+
+#[derive(Clone, Copy, Debug)]
+pub enum StepSize {
+  Constant(f32),
+  Decay{init_step: f32, step_decay: f32, step_iters: usize},
+  BacktrackingLineSearch{decay: f32, c: f32},
+  //WeakWolfeLineSearch,
+}
 
 pub trait OptWorker<T, S> {
   type Rng: Rng;

@@ -1,65 +1,66 @@
 use prelude::*;
 use data::{SampleWeight};
-use opt::{ClassOptStats};
+use opt::{StepSize, ClassOptStats};
 use rw::{ReadBuffer, WriteBuffer, AccumulateBuffer};
 
 use densearray::{Reshape, ReshapeMut};
-//use rng::xorshift::{Xorshiftplus128Rng};
 
 use rand::{Rng};
 use std::cmp::{min};
 use std::marker::{PhantomData};
-//use std::rc::{Rc};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct SgdOptConfig {
   pub batch_sz:     usize,
   pub minibatch_sz: usize,
-  pub step_size:    f32,
+  pub step_size:    StepSize,
   pub momentum:     Option<f32>,
   pub l2_reg:       Option<f32>,
 }
 
 pub struct SgdOptWorker<T, S, R, Op> where R: Rng, Op: DiffOperatorInput<T, S> {
-  cfg:      SgdOptConfig,
-  operator: Op,
-  cache:    Vec<S>,
-  param_sz: usize,
+  cfg:          SgdOptConfig,
+  iter_counter: usize,
+  prev_step:    f32,
+  operator:     Op,
+  cache:        Vec<S>,
+  param_sz:     usize,
   param_saved:  Vec<T>,
-  grad_cur:     Vec<T>,
+  grad:         Vec<T>,
   grad_acc:     Vec<T>,
-  stats_it: usize,
-  stats:    ClassOptStats,
-  _marker:  PhantomData<R>,
+  stats_it:     usize,
+  stats:        ClassOptStats,
+  _marker:      PhantomData<R>,
 }
 
 impl<S, R, Op> SgdOptWorker<f32, S, R, Op> where R: Rng, Op: DiffOperatorInput<f32, S, Rng=R> {
   pub fn new(cfg: SgdOptConfig, operator: Op) -> SgdOptWorker<f32, S, R, Op> {
-    let batch_sz = cfg.batch_sz;
-    let param_len = operator.param_len();
-    let mut param_saved = Vec::with_capacity(param_len);
-    for _ in 0 .. param_len {
+    let param_sz = operator.param_len();
+    let mut param_saved = Vec::with_capacity(param_sz);
+    for _ in 0 .. param_sz {
       param_saved.push(0.0);
     }
-    let mut grad_cur = Vec::with_capacity(param_len);
-    for _ in 0 .. param_len {
-      grad_cur.push(0.0);
+    let mut grad = Vec::with_capacity(param_sz);
+    for _ in 0 .. param_sz {
+      grad.push(0.0);
     }
-    let mut grad_acc = Vec::with_capacity(param_len);
-    for _ in 0 .. param_len {
+    let mut grad_acc = Vec::with_capacity(param_sz);
+    for _ in 0 .. param_sz {
       grad_acc.push(0.0);
     }
     SgdOptWorker{
-      cfg:      cfg,
-      operator: operator,
-      cache:    Vec::with_capacity(batch_sz),
-      param_sz: param_len,
+      cfg:          cfg,
+      iter_counter: 0,
+      prev_step:    0.0,
+      operator:     operator,
+      cache:        Vec::with_capacity(cfg.batch_sz),
+      param_sz:     param_sz,
       param_saved:  param_saved,
-      grad_cur:     grad_cur,
+      grad:         grad,
       grad_acc:     grad_acc,
-      stats_it: 0,
-      stats:    Default::default(),
-      _marker:  PhantomData,
+      stats_it:     0,
+      stats:        Default::default(),
+      _marker:      PhantomData,
     }
   }
 }
@@ -82,9 +83,11 @@ impl<S, R, Op> OptWorker<f32, S> for SgdOptWorker<f32, S, R, Op> where S: Sample
   }
 
   fn step(&mut self, samples: &mut Iterator<Item=S>) {
+    let num_batches = (self.cfg.minibatch_sz + self.cfg.batch_sz - 1) / self.cfg.batch_sz;
+
+    self.operator.save_rng_state();
     self.operator.reset_loss();
     self.operator.reset_grad();
-    let num_batches = (self.cfg.minibatch_sz + self.cfg.batch_sz - 1) / self.cfg.batch_sz;
     if let Some(mu) = self.cfg.momentum {
       self.operator.update_param(mu, 1.0, &mut self.grad_acc, 0);
     }
@@ -105,20 +108,35 @@ impl<S, R, Op> OptWorker<f32, S> for SgdOptWorker<f32, S, R, Op> where S: Sample
     if let Some(_) = self.cfg.momentum {
       self.operator.load_param(&mut self.param_saved, 0);
     }
-    /*self.operator.accumulate_grad(-self.cfg.step_size, 0.0, &mut self.grad_acc, 0);
-    self.operator.update_param(1.0, 1.0, &mut self.grad_acc, 0);*/
-    self.operator.store_grad(&mut self.grad_cur, 0);
+    self.operator.store_grad(&mut self.grad, 0);
+
+    let step_size = match self.cfg.step_size {
+      StepSize::Constant(alpha) => {
+        alpha
+      }
+      StepSize::Decay{init_step, step_decay, step_iters} => {
+        let num_decays = self.iter_counter / step_iters;
+        init_step * step_decay.powi(num_decays as i32)
+      }
+      _ => unimplemented!(),
+    };
+
     if let Some(mu) = self.cfg.momentum {
       self.grad_acc.reshape_mut(self.param_sz).vector_scale(mu);
+      self.grad_acc.reshape_mut(self.param_sz).vector_add(-step_size, self.grad.reshape(self.param_sz));
     } else {
-      self.grad_acc.reshape_mut(self.param_sz).set_constant(0.0);
+      self.grad_acc.copy_from_slice(&self.grad);
     }
-    self.grad_acc.reshape_mut(self.param_sz).vector_add(-self.cfg.step_size, self.grad_cur.reshape(self.param_sz));
+
     self.operator.update_param(1.0, 1.0, &mut self.grad_acc, 0);
     self.operator.store_param(&mut self.param_saved, 0);
+
     self.stats_it += 1;
     self.stats.sample_count += self.cfg.minibatch_sz;
     self.stats.avg_loss += 1.0 / (self.stats_it as f32) * (self.operator.store_loss() - self.stats.avg_loss);
+
+    self.iter_counter += 1;
+    self.prev_step = step_size;
   }
 
   fn eval(&mut self, epoch_sz: usize, samples: &mut Iterator<Item=S>) {

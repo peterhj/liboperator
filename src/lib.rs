@@ -60,9 +60,13 @@ pub enum Regularization {
 
 pub trait DiffOperator<T> {
   type Output;
+  //type FwdOut;
+  //type BwdOut;
   type Rng: Rng;
 
   fn _output(&self, arm: usize) -> Self::Output;
+  //fn _fwd_out(&self, arm: usize) -> Self::FwdOut;
+  //fn _bwd_out(&self, arm: usize) -> Self::BwdOut;
 
   #[deprecated] fn param_len(&self) -> usize { 0 }
   fn diff_param_sz(&self) -> usize { 0 }
