@@ -21,7 +21,7 @@ and provides an interface for the following tasks:
 - R-forward and R-backward propagation to compute Jacobian- and Hessian-vector
   products
 
-## I/O
+### I/O
 
 A significant responsibility of `DiffOperator` is to expose a reusable interface
 of I/O methods for loading and storing things of interest like data, parameters,
@@ -37,7 +37,7 @@ For parameters and gradients, the approach this library takes is to provide
 typed slices, as well as `ReadAccumulateBuffer` and `AccumulateBuffer` for
 combining a load/store with a linear combination.
 
-## Optimization
+### Optimization
 
 Iterative optimization methods implement the `OptWorker` trait, mainly the
 `step` method. This trait also makes a distinction between "local" and "global"
