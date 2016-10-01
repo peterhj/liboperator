@@ -5,8 +5,9 @@ use rand::{Rng};
 use std::path::{Path};
 
 //pub mod adagrad;
+//pub mod adam;
 pub mod grad;
-//pub mod rmsprop;
+pub mod rmsprop;
 pub mod sgd;
 
 #[derive(Clone, Copy, Debug)]
@@ -21,6 +22,12 @@ pub enum StepSize {
 pub enum GradientMomentum {
   HeavyBall(f32),
   Nesterov(f32),
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum NesterovParamState {
+  Orig,
+  PlusMomentum,
 }
 
 pub trait OptWorker<T, S> {
