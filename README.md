@@ -6,8 +6,8 @@ some implementations of common optimization algorithms, e.g. SGD.
 
 ## Concepts
 
-The core trait `DiffOperator` represents a differentiable operator and provides
-an interface for the following tasks:
+The core trait `DiffOperator` represents a differentiable parameterized operator
+and provides an interface for the following tasks:
 
 - loading external data (e.g. input, class labels, regression targets, etc.)
 - loading/storing the differentiable part of the parameter to a buffer
