@@ -114,8 +114,8 @@ impl<S, R, Op> OptWorker<f32, S> for SgdOptWorker<f32, S, R, Op> where S: Sample
       StepSize::Constant(alpha) => {
         alpha
       }
-      StepSize::Decay{init_step, step_decay, step_iters} => {
-        let num_decays = self.iter_counter / step_iters;
+      StepSize::Decay{init_step, step_decay, decay_iters} => {
+        let num_decays = self.iter_counter / decay_iters;
         init_step * step_decay.powi(num_decays as i32)
       }
       _ => unimplemented!(),

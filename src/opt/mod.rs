@@ -1,20 +1,26 @@
 use super::{CheckpointFormat};
 use rw::{ReadBuffer, WriteBuffer};
 
-//use rng::xorshift::{Xorshiftplus128Rng};
-
 use rand::{Rng};
 use std::path::{Path};
 
+//pub mod adagrad;
 pub mod grad;
+//pub mod rmsprop;
 pub mod sgd;
 
 #[derive(Clone, Copy, Debug)]
 pub enum StepSize {
   Constant(f32),
-  Decay{init_step: f32, step_decay: f32, step_iters: usize},
+  Decay{init_step: f32, step_decay: f32, decay_iters: usize},
   BacktrackingLineSearch{decay: f32, c: f32},
   //WeakWolfeLineSearch,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum GradientMomentum {
+  HeavyBall(f32),
+  Nesterov(f32),
 }
 
 pub trait OptWorker<T, S> {
