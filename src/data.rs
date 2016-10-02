@@ -8,6 +8,13 @@ pub trait SampleExtractInput<U> {
 
 pub trait SampleClass {
   fn class(&self) -> Option<u32>;
+  //fn class_weight(&self) -> Option<f32>;
+  //fn mix_class_weight(&mut self, w: f32);
+}
+
+pub trait SampleScalarTarget<U> {
+  fn scalar_target(&self) -> Option<U>;
+  fn scalar_target_weight(&self) -> Option<f32>;
 }
 
 pub trait SampleWeight {

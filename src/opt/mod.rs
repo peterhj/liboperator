@@ -30,6 +30,11 @@ pub enum NesterovParamState {
   PlusMomentum,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct StepStats {
+  pub elapsed:  Option<f64>,
+}
+
 pub trait OptWorker<T, S> {
   type Rng: Rng;
 
@@ -39,7 +44,7 @@ pub trait OptWorker<T, S> {
   fn store_local_param(&mut self, param_writer: &mut WriteBuffer<T>);
   fn store_global_param(&mut self, param_writer: &mut WriteBuffer<T>);
 
-  fn step(&mut self, samples: &mut Iterator<Item=S>);
+  fn step(&mut self, samples: &mut Iterator<Item=S>) /* -> StepStats*/;
   fn eval(&mut self, epoch_size: usize, samples: &mut Iterator<Item=S>);
 }
 

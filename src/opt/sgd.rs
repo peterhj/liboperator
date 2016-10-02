@@ -53,7 +53,7 @@ impl<S, R, Op> SgdOptWorker<f32, S, R, Op> where R: Rng, Op: DiffOperatorInput<f
       iter_counter: 0,
       prev_step:    0.0,
       operator:     operator,
-      cache:        Vec::with_capacity(cfg.batch_sz),
+      cache:        Vec::with_capacity(cfg.minibatch_sz),
       param_sz:     param_sz,
       param_saved:  param_saved,
       grad:         grad,
@@ -84,6 +84,11 @@ impl<S, R, Op> OptWorker<f32, S> for SgdOptWorker<f32, S, R, Op> where S: Sample
 
   fn step(&mut self, samples: &mut Iterator<Item=S>) {
     let num_batches = (self.cfg.minibatch_sz + self.cfg.batch_sz - 1) / self.cfg.batch_sz;
+    self.cache.clear();
+    for mut sample in samples.take(self.cfg.minibatch_sz) {
+      sample.mix_weight(1.0 / self.cfg.minibatch_sz as f32);
+      self.cache.push(sample);
+    }
 
     self.operator.save_rng_state();
     self.operator.reset_loss();
@@ -92,13 +97,15 @@ impl<S, R, Op> OptWorker<f32, S> for SgdOptWorker<f32, S, R, Op> where S: Sample
       self.operator.update_param(mu, 1.0, &mut self.grad_acc, 0);
     }
     for batch in 0 .. num_batches {
-      let actual_batch_sz = min((batch+1) * self.cfg.batch_sz, self.cfg.minibatch_sz) - batch * self.cfg.batch_sz;
+      /*let actual_batch_sz = min((batch+1) * self.cfg.batch_sz, self.cfg.minibatch_sz) - batch * self.cfg.batch_sz;
       self.cache.clear();
       for mut sample in samples.take(actual_batch_sz) {
         sample.mix_weight(1.0 / self.cfg.minibatch_sz as f32);
         self.cache.push(sample);
-      }
-      self.operator.load_data(&self.cache);
+      }*/
+      let batch_start = batch * self.cfg.batch_sz;
+      let batch_end = min((batch+1) * self.cfg.batch_sz, self.cfg.minibatch_sz);
+      self.operator.load_data(&self.cache[batch_start .. batch_end]);
       self.operator.forward(OpPhase::Learning);
       self.operator.backward();
     }

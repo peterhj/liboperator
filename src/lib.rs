@@ -12,6 +12,7 @@ pub mod data;
 pub mod opt;
 pub mod prelude;
 pub mod rw;
+pub mod timing;
 
 #[derive(Clone, Copy)]
 pub enum OpCapability {
@@ -86,6 +87,8 @@ pub trait DiffOperator<T> {
   fn store_param(&mut self, _param_writer: &mut WriteBuffer<T>, _offset: usize) -> usize { 0 }
   fn load_param(&mut self, _param_reader: &mut ReadBuffer<T>, _offset: usize) -> usize { 0 }
   fn update_param(&mut self, _alpha: f32, _beta: f32, _grad_reader: &mut ReadAccumulateBuffer<T>, _offset: usize) -> usize { 0 }
+
+  fn update_nondiff_param(&mut self) {}
 
   fn reset_grad(&mut self) {}
   fn store_grad(&mut self, _grad_writer: &mut WriteBuffer<T>, _offset: usize) -> usize { 0 }
