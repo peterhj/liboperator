@@ -5,7 +5,7 @@ use rand::{Rng};
 use std::path::{Path};
 
 //pub mod adagrad;
-//pub mod adam;
+pub mod adam;
 pub mod grad;
 pub mod rmsprop;
 pub mod sgd;
