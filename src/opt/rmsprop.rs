@@ -14,8 +14,12 @@ pub struct RmspropConfig {
   pub batch_sz:     usize,
   pub minibatch_sz: usize,
   pub step_size:    StepSize,
-  pub momentum:     Option<GradientMomentum>,
+  //pub momentum:     Option<GradientMomentum>,
+  pub momentum:     f32,
   pub gamma:        f32,
+  /// `centered_var`: When enabled, this stores the 1st moment of the gradients
+  /// and uses it to center the variance; c.f. [Graves 2013, arXiv:1308.0850].
+  pub centered_var: bool,
   pub epsilon:      f32,
   pub l2_reg:       Option<f32>,
 }
@@ -27,9 +31,10 @@ pub struct RmspropWorker<T, S, R, Op> where R: Rng, Op: DiffOperatorInput<T, S> 
   cache:        Vec<S>,
   grad_sz:      usize,
   nondiff_sz:   usize,
-  param_state:  NesterovParamState,
+  //param_state:  NesterovParamState,
   param_saved:  Vec<T>,
   grad:         Vec<T>,
+  grad_acc:     Option<Vec<T>>,
   sq_grad_acc:  Vec<T>,
   nrm_update:   Vec<T>,
   tmp_buf:      Vec<T>,
@@ -50,6 +55,15 @@ impl<S, R, Op> RmspropWorker<f32, S, R, Op> where R: Rng, Op: DiffOperatorInput<
     for _ in 0 .. grad_sz {
       grad.push(0.0);
     }
+    let grad_acc = if cfg.centered_var {
+    let mut grad_acc = Vec::with_capacity(grad_sz);
+      for _ in 0 .. grad_sz {
+        grad_acc.push(0.0);
+      }
+      Some(grad_acc)
+    } else {
+      None
+    };
     let mut sq_grad_acc = Vec::with_capacity(grad_sz);
     for _ in 0 .. grad_sz {
       sq_grad_acc.push(0.0);
@@ -69,9 +83,10 @@ impl<S, R, Op> RmspropWorker<f32, S, R, Op> where R: Rng, Op: DiffOperatorInput<
       cache:        Vec::with_capacity(cfg.batch_sz),
       grad_sz:      grad_sz,
       nondiff_sz:   0, // FIXME(20161001): count nondiff params too (e.g. batchnorm).
-      param_state:  NesterovParamState::Orig,
+      //param_state:  NesterovParamState::Orig,
       param_saved:  param_saved,
       grad:         grad,
+      grad_acc:     grad_acc,
       sq_grad_acc:  sq_grad_acc,
       nrm_update:   nrm_update,
       tmp_buf:      tmp_buf,
@@ -102,13 +117,6 @@ impl<S, R, Op> OptWorker<f32, S> for RmspropWorker<f32, S, R, Op> where S: Sampl
   fn step(&mut self, samples: &mut Iterator<Item=S>) {
     let num_batches = (self.cfg.minibatch_sz + self.cfg.batch_sz - 1) / self.cfg.batch_sz;
 
-    /*match self.param_state {
-      NesterovParamState::Orig => {
-        //self.operator.load_param(..., 0);
-        self.param_state = NesterovParamState::PlusMomentum;
-      }
-      NesterovParamState::PlusMomentum => {}
-    }*/
     self.operator.save_rng_state();
     self.operator.reset_loss();
     self.operator.reset_grad();
@@ -145,15 +153,31 @@ impl<S, R, Op> OptWorker<f32, S> for RmspropWorker<f32, S, R, Op> where S: Sampl
       _ => unimplemented!(),
     };
 
+    if let Some(ref mut grad_acc) = self.grad_acc {
+      if self.iter_counter == 0 {
+        grad_acc.copy_from_slice(&self.grad);
+      } else {
+        grad_acc.reshape_mut(self.grad_sz).vector_scale(1.0 - self.cfg.gamma);
+        grad_acc.reshape_mut(self.grad_sz).vector_add(self.cfg.gamma, self.grad.reshape(self.grad_sz));
+      }
+    }
     self.tmp_buf.copy_from_slice(&self.grad);
     self.tmp_buf.reshape_mut(self.grad_sz).vector_square();
-    self.sq_grad_acc.reshape_mut(self.grad_sz).vector_scale(1.0 - self.cfg.gamma);
-    self.sq_grad_acc.reshape_mut(self.grad_sz).vector_add(self.cfg.gamma, self.tmp_buf.reshape(self.grad_sz));
+    if self.iter_counter == 0 {
+      self.sq_grad_acc.copy_from_slice(&self.tmp_buf);
+    } else {
+      self.sq_grad_acc.reshape_mut(self.grad_sz).vector_scale(1.0 - self.cfg.gamma);
+      self.sq_grad_acc.reshape_mut(self.grad_sz).vector_add(self.cfg.gamma, self.tmp_buf.reshape(self.grad_sz));
+    }
 
-    self.tmp_buf.copy_from_slice(&self.sq_grad_acc);
-    self.tmp_buf.reshape_mut(self.grad_sz).vector_add_scalar(self.cfg.epsilon);
-    self.tmp_buf.reshape_mut(self.grad_sz).vector_sqrt();
-    self.nrm_update.copy_from_slice(&self.tmp_buf);
+    self.nrm_update.copy_from_slice(&self.sq_grad_acc);
+    if let Some(ref grad_acc) = self.grad_acc {
+      self.tmp_buf.copy_from_slice(grad_acc);
+      self.tmp_buf.reshape_mut(self.grad_sz).vector_square();
+      self.nrm_update.reshape_mut(self.grad_sz).vector_add(-1.0, self.tmp_buf.reshape(self.grad_sz));
+    }
+    self.nrm_update.reshape_mut(self.grad_sz).vector_add_scalar(self.cfg.epsilon);
+    self.nrm_update.reshape_mut(self.grad_sz).vector_sqrt();
     self.nrm_update.reshape_mut(self.grad_sz).vector_recip();
     self.nrm_update.reshape_mut(self.grad_sz).vector_elem_mult(1.0, self.grad.reshape(self.grad_sz));
 
