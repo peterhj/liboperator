@@ -2,7 +2,8 @@
 
 This is a Rust library for implementing differentiable operators used in
 optimization. This library contains traits for generic operators, as well as
-some implementations of common optimization algorithms, e.g. SGD.
+some implementations of common optimization algorithms, e.g. SGD, RMSprop, and
+Adam.
 
 ## Concepts
 
