@@ -61,13 +61,9 @@ pub enum Regularization {
 
 pub trait DiffOperator<T> {
   type Output;
-  //type FwdOut;
-  //type BwdOut;
   type Rng: Rng;
 
   fn _output(&self, arm: usize) -> Self::Output;
-  //fn _fwd_out(&self, arm: usize) -> Self::FwdOut;
-  //fn _bwd_out(&self, arm: usize) -> Self::BwdOut;
 
   #[deprecated] fn param_len(&self) -> usize { 0 }
   fn diff_param_sz(&self) -> usize { 0 }
@@ -104,7 +100,9 @@ pub trait DiffOperator<T> {
   //fn apply_reg(&mut self, _reg: Regularization) {}
 
   fn forward(&mut self, phase: OpPhase);
+  fn fwd_reg(&mut self, _reg: Regularization) {}
   fn backward(&mut self);
+  fn bwd_reg(&mut self, _reg: Regularization) {}
   fn r_forward(&mut self) { unimplemented!(); }
   fn r_backward(&mut self) { unimplemented!(); }
 }
