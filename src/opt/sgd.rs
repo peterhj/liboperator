@@ -97,12 +97,6 @@ impl<S, R, Op> OptWorker<f32, S> for SgdWorker<f32, S, R, Op> where S: SampleWei
       self.operator.update_param(mu, 1.0, &mut self.grad_acc, 0);
     }
     for batch in 0 .. num_batches {
-      /*let actual_batch_sz = min((batch+1) * self.cfg.batch_sz, self.cfg.minibatch_sz) - batch * self.cfg.batch_sz;
-      self.cache.clear();
-      for mut sample in samples.take(actual_batch_sz) {
-        sample.mix_weight(1.0 / self.cfg.minibatch_sz as f32);
-        self.cache.push(sample);
-      }*/
       let batch_start = batch * self.cfg.batch_sz;
       let batch_end = min((batch+1) * self.cfg.batch_sz, self.cfg.minibatch_sz);
       self.operator.load_data(&self.cache[batch_start .. batch_end]);
@@ -130,12 +124,13 @@ impl<S, R, Op> OptWorker<f32, S> for SgdWorker<f32, S, R, Op> where S: SampleWei
 
     if let Some(mu) = self.cfg.momentum {
       self.grad_acc.reshape_mut(self.param_sz).vector_scale(mu);
-      self.grad_acc.reshape_mut(self.param_sz).vector_add(-step_size, self.grad.reshape(self.param_sz));
     } else {
-      self.grad_acc.copy_from_slice(&self.grad);
+      self.grad_acc.reshape_mut(self.param_sz).set_constant(0.0);
     }
+    self.grad_acc.reshape_mut(self.param_sz).vector_add(-step_size, self.grad.reshape(self.param_sz));
 
     self.operator.update_param(1.0, 1.0, &mut self.grad_acc, 0);
+    self.operator.update_nondiff_param(self.iter_counter);
     self.operator.store_param(&mut self.param_saved, 0);
 
     self.stats_it += 1;

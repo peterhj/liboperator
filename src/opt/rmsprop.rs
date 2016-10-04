@@ -15,7 +15,7 @@ pub struct RmspropConfig {
   pub minibatch_sz: usize,
   pub step_size:    StepSize,
   //pub momentum:     Option<GradientMomentum>,
-  pub momentum:     f32,
+  pub momentum:     Option<f32>,
   pub gamma:        f32,
   /// `centered_var`: When enabled, this stores the 1st moment of the gradients
   /// and uses it to center the variance; c.f. [Graves 2013, arXiv:1308.0850].
@@ -37,6 +37,7 @@ pub struct RmspropWorker<T, S, R, Op> where R: Rng, Op: DiffOperatorInput<T, S> 
   grad_acc:     Option<Vec<T>>,
   sq_grad_acc:  Vec<T>,
   nrm_update:   Vec<T>,
+  //nrm_upd_acc:  Vec<T>,
   tmp_buf:      Vec<T>,
   stats_it:     usize,
   stats:        ClassOptStats,
