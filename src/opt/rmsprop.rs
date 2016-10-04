@@ -1,6 +1,6 @@
 use prelude::*;
 use data::{SampleWeight};
-use opt::{StepSize, GradientMomentum, NesterovParamState, ClassOptStats};
+use opt::{GradientMomentum, NesterovParamState, ClassOptStats};
 use rw::{ReadBuffer, WriteBuffer, AccumulateBuffer};
 
 use densearray::{Reshape, ReshapeMut};

@@ -1,6 +1,6 @@
 use prelude::*;
 use data::{SampleWeight};
-use opt::{StepSize, ClassOptStats};
+use opt::{ClassOptStats};
 use rw::{ReadBuffer, WriteBuffer, AccumulateBuffer};
 
 use densearray::{Reshape, ReshapeMut};
@@ -194,6 +194,7 @@ impl<S, R, Op> OptWorker<f32, S> for GradientDescentOptWorker<f32, S, R, Op> whe
         self.operator.restore_rng_state();
         t
       }
+      _ => unimplemented!(),
     };
 
     self.operator.update_param(-step_size, 1.0, &mut self.grad_acc, 0);
