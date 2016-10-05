@@ -24,6 +24,7 @@ struct SgdAdaptiveState {
   test_iters:   usize,
   epoch_iters:  usize,
   sched:        AdaptiveStepSizeSchedule,
+  prev_attempt: usize,
   prev_step:    f32,
   param_sav:    Vec<f32>,
   grad:         Vec<f32>,
@@ -53,6 +54,7 @@ impl SgdAdaptiveState {
       test_iters:   test_iters,
       epoch_iters:  epoch_iters,
       sched:        sched,
+      prev_attempt: 0,
       prev_step:    1.0,
       param_sav:    param_sav,
       grad:         grad,
@@ -90,12 +92,14 @@ impl SgdAdaptiveState {
     if let Some(_) = self.momentum {
       operator.load_param(&mut self.param_sav, 0);
     }
+    assert!(!rhs.is_nan());
 
     // FIXME(20161004): do increasing search too to get largest step size that works.
+    let mut test_attempt = 0;
     //let mut test_step = self.adapt_state.as_ref().unwrap().prev_step;
     let mut test_step = self.init_step;
-    let mut test_descent = None;
-    let mut test_prev_diverged = false;
+    let mut best = None;
+    let mut prev_diverged = false;
     let mut t = 0;
     loop {
       match self.sched {
@@ -145,28 +149,31 @@ impl SgdAdaptiveState {
       }
 
       let descent = rhs - lhs;
-      t += 1;
       if descent <= 0.0 || descent.is_nan() {
-        test_prev_diverged = true;
+        prev_diverged = true;
+        t += 1;
         continue;
       }
-      test_prev_diverged = false;
-      match test_descent {
+      prev_diverged = false;
+      match best {
         None => {
-          test_descent = Some((test_step, descent));
+          best = Some((t, test_step, descent));
         }
-        Some((best_step, best_descent)) => {
+        Some((best_attempt, best_step, best_descent)) => {
           if descent > best_descent {
-            test_descent = Some((test_step, descent));
-          } else if !test_prev_diverged {
+            best = Some((t, test_step, descent));
+          } else if !prev_diverged {
+            test_attempt = best_attempt;
             test_step = best_step;
             break;
           }
         }
       }
+      t += 1;
     }
+    //println!("DEBUG: auto adaptive step size: attempt: {} step: {:e} descent: {:e}", t, test_step, test_descent.unwrap().1);
+    self.prev_attempt = test_attempt;
     self.prev_step = test_step;
-    println!("DEBUG: auto adaptive step size: attempts: {} step: {:e} descent: {:e}", t, test_step, test_descent.unwrap().1);
     test_step
   }
 }
@@ -266,7 +273,9 @@ impl<S, R, Op> OptWorker<f32, S> for SgdWorker<f32, S, R, Op> where S: SampleWei
       }
       StepSize::Adaptive{epoch_iters, ..} => {
         if self.iter_counter % epoch_iters == 0 {
-          self.adapt_state.as_mut().unwrap().search(self.iter_counter, &mut self.cache, &mut self.operator, &self.param_saved, &self.grad_acc, samples)
+          let step_size = self.adapt_state.as_mut().unwrap().search(self.iter_counter, &mut self.cache, &mut self.operator, &self.param_saved, &self.grad_acc, samples);
+          self.operator.load_param(&mut self.param_saved, 0);
+          step_size
         } else {
           self.adapt_state.as_ref().unwrap().prev_step
         }
@@ -300,6 +309,10 @@ impl<S, R, Op> OptWorker<f32, S> for SgdWorker<f32, S, R, Op> where S: SampleWei
       self.operator.load_param(&mut self.param_saved, 0);
     }
     self.operator.store_grad(&mut self.grad, 0);
+    let loss = self.operator.store_loss();
+
+    // TODO(20161004): if the loss is NaN, and we are doing adaptive step size,
+    // then restart the step size search.
 
     if let Some(mu) = self.cfg.momentum {
       self.grad_acc.reshape_mut(self.param_sz).vector_scale(mu);
@@ -314,7 +327,7 @@ impl<S, R, Op> OptWorker<f32, S> for SgdWorker<f32, S, R, Op> where S: SampleWei
 
     self.stats_it += 1;
     self.stats.sample_count += self.cfg.minibatch_sz;
-    self.stats.avg_loss += 1.0 / (self.stats_it as f32) * (self.operator.store_loss() - self.stats.avg_loss);
+    self.stats.avg_loss += 1.0 / (self.stats_it as f32) * (loss - self.stats.avg_loss);
 
     self.iter_counter += 1;
     //self.prev_step = step_size;
