@@ -98,6 +98,7 @@ impl SgdAdaptiveState {
     let mut test_attempt = 0;
     //let mut test_step = self.adapt_state.as_ref().unwrap().prev_step;
     let mut test_step = self.init_step;
+    let mut test_descent = 0.0;
     let mut best = None;
     let mut prev_diverged = false;
     let mut t = 0;
@@ -165,13 +166,14 @@ impl SgdAdaptiveState {
           } else if !prev_diverged {
             test_attempt = best_attempt;
             test_step = best_step;
+            test_descent = best_descent;
             break;
           }
         }
       }
       t += 1;
     }
-    //println!("DEBUG: auto adaptive step size: attempt: {} step: {:e} descent: {:e}", t, test_step, test_descent.unwrap().1);
+    println!("DEBUG: auto adaptive step size: attempt: {} step: {:e} descent: {:e}", test_attempt, test_step, test_descent);
     self.prev_attempt = test_attempt;
     self.prev_step = test_step;
     test_step

@@ -168,6 +168,7 @@ impl<S, R, Op> OptWorker<f32, S> for AdamWorker<f32, S, R, Op> where S: SampleWe
     self.nrm_update.reshape_mut(self.grad_sz).vector_scale(1.0 / (1.0 - (1.0 - self.cfg.gamma1).powi((self.iter_counter + 1) as i32)));
 
     self.operator.update_param(-step_size, 1.0, &mut self.nrm_update, 0);
+    self.operator.update_nondiff_param(self.iter_counter);
     self.operator.store_param(&mut self.param_saved, 0);
 
     self.stats_it += 1;
