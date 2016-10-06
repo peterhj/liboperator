@@ -42,8 +42,7 @@ pub struct AdamWorker<T, S, R, Op> where R: Rng, Op: DiffOperatorInput<T, S> {
 
 impl<S, R, Op> AdamWorker<f32, S, R, Op> where R: Rng, Op: DiffOperatorInput<f32, S, Rng=R> {
   pub fn new(cfg: AdamConfig, operator: Op) -> AdamWorker<f32, S, R, Op> {
-    let grad_sz = operator.param_len();
-    //let grad_sz = operator.diff_param_sz();
+    let grad_sz = operator.diff_param_sz();
     let mut param_saved = Vec::with_capacity(grad_sz);
     for _ in 0 .. grad_sz {
       param_saved.push(0.0);

@@ -205,7 +205,7 @@ pub struct SgdWorker<T, S, R, Op> where R: Rng, Op: DiffOperatorInput<T, S> {
 
 impl<S, R, Op> SgdWorker<f32, S, R, Op> where R: Rng, Op: DiffOperatorInput<f32, S, Rng=R> {
   pub fn new(cfg: SgdConfig, operator: Op) -> SgdWorker<f32, S, R, Op> {
-    let grad_sz = operator.param_len();
+    let grad_sz = operator.diff_param_sz();
     let adapt_state = if let StepSize::Adaptive{init_step, test_iters, epoch_iters, sched} = cfg.step_size {
       Some(SgdAdaptiveState::new(cfg.batch_sz, cfg.minibatch_sz, cfg.momentum, grad_sz, init_step, test_iters, epoch_iters, sched))
     } else {

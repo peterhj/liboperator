@@ -65,7 +65,7 @@ pub trait DiffOperator<T> {
 
   fn _output(&self, arm: usize) -> Self::Output;
 
-  #[deprecated] fn param_len(&self) -> usize { 0 }
+  //#[deprecated] fn param_len(&self) -> usize { 0 }
   fn diff_param_sz(&self) -> usize { 0 }
   fn nondiff_param_sz(&self) -> usize { 0 }
   fn total_param_sz(&self) -> usize {
@@ -80,7 +80,7 @@ pub trait DiffOperator<T> {
   //fn init_state(&mut self) {}
 
   fn init_param(&mut self, _rng: &mut Self::Rng) {}
-  fn reset_nondiff_param(&mut self) {}
+  //fn reset_nondiff_param(&mut self) {}
   fn store_param(&mut self, _param_writer: &mut WriteBuffer<T>, _offset: usize) -> usize { 0 }
   fn store_nondiff_param(&mut self, _param_writer: &mut WriteBuffer<T>, _offset: usize) -> usize { 0 }
   fn load_param(&mut self, _param_reader: &mut ReadBuffer<T>, _offset: usize) -> usize { 0 }
