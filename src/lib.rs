@@ -1,4 +1,5 @@
 extern crate densearray;
+extern crate sharedmem;
 
 extern crate rand;
 
@@ -65,7 +66,6 @@ pub trait DiffOperator<T> {
 
   fn _output(&self, arm: usize) -> Self::Output;
 
-  //#[deprecated] fn param_len(&self) -> usize { 0 }
   fn diff_param_sz(&self) -> usize { 0 }
   fn nondiff_param_sz(&self) -> usize { 0 }
   fn total_param_sz(&self) -> usize {
@@ -74,10 +74,10 @@ pub trait DiffOperator<T> {
 
   fn save_rng_state(&mut self) {}
   fn restore_rng_state(&mut self) {}
-  fn store_rng_state(&mut self, _rng_state: &mut Write) {}
-  fn load_rng_state(&mut self, _rng_state: &mut Read) {}
+  //fn store_rng_state(&mut self, _rng_state: &mut Write) {}
+  //fn load_rng_state(&mut self, _rng_state: &mut Read) {}
 
-  //fn init_state(&mut self) {}
+  //fn reset_state(&mut self) {}
 
   fn init_param(&mut self, _rng: &mut Self::Rng) {}
   //fn reset_nondiff_param(&mut self) {}
@@ -86,20 +86,17 @@ pub trait DiffOperator<T> {
   fn load_param(&mut self, _param_reader: &mut ReadBuffer<T>, _offset: usize) -> usize { 0 }
   fn load_nondiff_param(&mut self, _param_reader: &mut ReadBuffer<T>, _offset: usize) -> usize { 0 }
   fn update_param(&mut self, _alpha: f32, _beta: f32, _grad_reader: &mut ReadAccumulateBuffer<T>, _offset: usize) -> usize { 0 }
-  fn update_nondiff_param(&mut self, iter: usize) {}
+  fn update_nondiff_param(&mut self, _iter: usize) {}
 
   fn reset_grad(&mut self) {}
   fn store_grad(&mut self, _grad_writer: &mut WriteBuffer<T>, _offset: usize) -> usize { 0 }
-  //fn load_grad(&mut self, _grad_reader: &mut ReadBuffer<T>, _offset: usize) -> usize { 0 }
   fn accumulate_grad(&mut self, _alpha: f32, _beta: f32, _grad_accum: &mut AccumulateBuffer<T>, _offset: usize) -> usize { 0 }
   fn grad_step(&mut self, _alpha: f32, _beta: f32) {}
 
   fn reset_loss(&mut self) {}
   fn store_loss(&mut self) -> f32 { 0.0 }
-  fn add_loss(&mut self, _extra_loss: f32) { unimplemented!(); }
 
   fn apply_grad_reg(&mut self, _reg: Regularization) {}
-  //fn apply_reg(&mut self, _reg: Regularization) {}
 
   fn forward(&mut self, phase: OpPhase);
   fn fwd_reg(&mut self, _reg: Regularization) {}

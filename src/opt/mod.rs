@@ -13,6 +13,7 @@ pub mod adam;
 //pub mod grad;
 pub mod rmsprop;
 pub mod sgd;
+pub mod shared_sgd;
 
 #[derive(Clone, Copy, Debug)]
 pub enum StepSize {

@@ -179,12 +179,14 @@ impl SgdAdaptiveState {
     test_step
   }
 }
+
 #[derive(Clone, Copy, Debug)]
 pub struct SgdConfig {
   pub batch_sz:     usize,
   pub minibatch_sz: usize,
   pub step_size:    StepSize,
   pub momentum:     Option<f32>,
+  //pub momentum:     Option<GradientMomentum>,
   pub l2_reg:       Option<f32>,
 }
 
@@ -194,7 +196,7 @@ pub struct SgdWorker<T, S, R, Op> where R: Rng, Op: DiffOperatorInput<T, S> {
   adapt_state:  Option<SgdAdaptiveState>,
   operator:     Op,
   cache:        Vec<S>,
-  param_sz:     usize,
+  grad_sz:      usize,
   param_saved:  Vec<T>,
   grad:         Vec<T>,
   grad_acc:     Vec<T>,
@@ -234,7 +236,7 @@ impl<S, R, Op> SgdWorker<f32, S, R, Op> where R: Rng, Op: DiffOperatorInput<f32,
       adapt_state:  adapt_state,
       operator:     operator,
       cache:        cache,
-      param_sz:     grad_sz,
+      grad_sz:      grad_sz,
       param_saved:  param_saved,
       grad:         grad,
       grad_acc:     grad_acc,
@@ -317,11 +319,11 @@ impl<S, R, Op> OptWorker<f32, S> for SgdWorker<f32, S, R, Op> where S: SampleWei
     // then restart the step size search.
 
     if let Some(mu) = self.cfg.momentum {
-      self.grad_acc.reshape_mut(self.param_sz).vector_scale(mu);
+      self.grad_acc.reshape_mut(self.grad_sz).vector_scale(mu);
     } else {
-      self.grad_acc.reshape_mut(self.param_sz).set_constant(0.0);
+      self.grad_acc.reshape_mut(self.grad_sz).set_constant(0.0);
     }
-    self.grad_acc.reshape_mut(self.param_sz).vector_add(-step_size, self.grad.reshape(self.param_sz));
+    self.grad_acc.reshape_mut(self.grad_sz).vector_add(-step_size, self.grad.reshape(self.grad_sz));
 
     self.operator.update_param(1.0, 1.0, &mut self.grad_acc, 0);
     self.operator.update_nondiff_param(self.iter_counter);

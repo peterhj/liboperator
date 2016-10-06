@@ -10,5 +10,5 @@ path = "src/lib.rs"
 [dependencies]
 rand = "*"
 densearray = { path = "../libdensearray" }
-#sharedmem = { path = "../libsharedmem" }
+sharedmem = { path = "../libsharedmem" }
 rng = { path = "../librng" }
