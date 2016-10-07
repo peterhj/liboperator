@@ -178,13 +178,6 @@ impl<S, R, Op> OptWorker<f32, S> for AdamWorker<f32, S, R, Op> where S: SampleWe
   }
 
   fn eval(&mut self, epoch_sz: usize, samples: &mut Iterator<Item=S>) {
-    /*match self.param_state {
-      NesterovParamState::Orig => {}
-      NesterovParamState::PlusMomentum => {
-        //self.operator.load_param(..., 0);
-        self.param_state = NesterovParamState::Orig;
-      }
-    }*/
     self.cache.clear();
     self.operator.reset_loss();
     for mut sample in samples.take(epoch_sz) {
@@ -218,3 +211,10 @@ impl<S, R, Op> OptStats<ClassOptStats> for AdamWorker<f32, S, R, Op> where S: Sa
     &self.stats
   }
 }
+
+/*impl<S, R, Op> OptUpdateStats<ClassOptStats> for AdamWorker<f32, S, R, Op> where S: SampleWeight, R: Rng, Op: DiffOperatorInput<f32, S> {
+  fn update_stats(&mut self, stats: &mut ClassOptStats) {
+    stats.iter_count += 1;
+    // FIXME
+  }
+}*/

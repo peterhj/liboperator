@@ -107,14 +107,26 @@ pub trait OptStats<Stats> {
   fn get_opt_stats(&self) -> &Stats;
 }
 
+pub trait OptUpdateStats<Stats> {
+  fn update_stats(&mut self, stats: &mut Stats);
+}
+
 #[derive(Clone, Default, Debug)]
 pub struct ClassOptStats {
+  pub iter_count:       usize,
   pub sample_count:     usize,
   pub correct_count:    usize,
   pub avg_loss:         f32,
 }
 
 impl ClassOptStats {
+  pub fn reset(&mut self) {
+    self.iter_count = 0;
+    self.sample_count = 0;
+    self.correct_count = 0;
+    self.avg_loss = 0.0;
+  }
+
   pub fn accuracy(&self) -> f32 {
     self.correct_count as f32 / self.sample_count as f32
   }

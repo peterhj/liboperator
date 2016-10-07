@@ -10,6 +10,7 @@ use std::io::{Read, Write};
 use std::ops::{Deref};
 
 pub mod data;
+pub mod io;
 pub mod opt;
 pub mod prelude;
 pub mod rw;
@@ -106,15 +107,22 @@ pub trait DiffOperator<T> {
   fn r_backward(&mut self) { unimplemented!(); }
 }
 
+pub trait DiffOperatorIo<T, Buf>/*: DiffOperator*/ {
+  fn store_param(&mut self, _param_writer: &mut Buf, _offset: usize) -> usize { 0 }
+  fn store_nondiff_param(&mut self, _param_writer: &mut Buf, _offset: usize) -> usize { 0 }
+  fn load_param(&mut self, _param_reader: &mut Buf, _offset: usize) -> usize { 0 }
+  fn load_nondiff_param(&mut self, _param_reader: &mut Buf, _offset: usize) -> usize { 0 }
+  fn update_param(&mut self, _alpha: T, _beta: T, _grad_reader: &mut Buf, _offset: usize) -> usize { 0 }
+  fn store_grad(&mut self, _grad_writer: &mut Buf, _offset: usize) -> usize { 0 }
+  fn accumulate_grad(&mut self, _alpha: T, _beta: T, _grad_writer: &mut Buf, _offset: usize) -> usize { 0 }
+}
+
 pub trait DiffOperatorInput<T, S>: DiffOperator<T> {
   fn load_data(&mut self, samples: &[S]);
 }
 
 pub trait DiffOperatorOutput<T, U>: DiffOperator<T> {
   fn get_output(&mut self) -> U;
-}
-
-pub trait DiffOperatorIo<T, S, U>: DiffOperatorInput<T, S> + DiffOperatorOutput<T, U> {
 }
 
 pub trait CheckpointFormat {
@@ -124,3 +132,11 @@ pub trait DiffOperatorCheckpoint<Format> where Format: CheckpointFormat {
   fn decode(reader: &mut Read) -> Result<Self, ()> where Self: Sized;
   fn encode(&mut self, writer: &mut Write) -> Result<(), ()>;
 }
+
+/*pub struct SourceSinkOperator<T, Buf, S, U, SrcOp, DstOp>
+where SrcOp: DiffOperator + DiffOperatorIo<T, Buf> + DiffOperatorInput<S>,
+      DstOp: DiffOperator + DiffOperatorIo<T, Buf> + DiffOperatorInput<S> + DiffOperatorOutput<U>,
+{
+  pub source:   Rc<RefCell<SrcOp>>,
+  pub sink:     Rc<RefCell<DstOp>>,
+}*/
