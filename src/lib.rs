@@ -50,7 +50,7 @@ impl OpCapability {
   }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum OpPhase {
   Inference,
   Learning,
@@ -107,12 +107,12 @@ pub trait DiffOperator<T> {
   fn r_backward(&mut self) { unimplemented!(); }
 }
 
-pub trait DiffOperatorIo<T, Buf>/*: DiffOperator*/ {
-  fn store_param(&mut self, _param_writer: &mut Buf, _offset: usize) -> usize { 0 }
+pub trait DiffOperatorIo<T, Buf>/*: DiffOperator*/ where T: Copy {
+  fn store_diff_param(&mut self, _param_writer: &mut Buf, _offset: usize) -> usize { 0 }
   fn store_nondiff_param(&mut self, _param_writer: &mut Buf, _offset: usize) -> usize { 0 }
-  fn load_param(&mut self, _param_reader: &mut Buf, _offset: usize) -> usize { 0 }
+  fn load_diff_param(&mut self, _param_reader: &mut Buf, _offset: usize) -> usize { 0 }
   fn load_nondiff_param(&mut self, _param_reader: &mut Buf, _offset: usize) -> usize { 0 }
-  fn update_param(&mut self, _alpha: T, _beta: T, _grad_reader: &mut Buf, _offset: usize) -> usize { 0 }
+  fn update_diff_param(&mut self, _alpha: T, _beta: T, _delta_reader: &mut Buf, _offset: usize) -> usize { 0 }
   fn store_grad(&mut self, _grad_writer: &mut Buf, _offset: usize) -> usize { 0 }
   fn accumulate_grad(&mut self, _alpha: T, _beta: T, _grad_writer: &mut Buf, _offset: usize) -> usize { 0 }
 }

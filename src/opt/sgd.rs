@@ -329,12 +329,12 @@ impl<S, R, Op> OptWorker<f32, S> for SgdWorker<f32, S, R, Op> where S: SampleWei
     self.operator.update_nondiff_param(self.iter_counter);
     self.operator.store_param(&mut self.param_saved, 0);
 
+    self.iter_counter += 1;
+    //self.prev_step = step_size;
+
     self.stats_it += 1;
     self.stats.sample_count += self.cfg.minibatch_sz;
     self.stats.avg_loss += 1.0 / (self.stats_it as f32) * (loss - self.stats.avg_loss);
-
-    self.iter_counter += 1;
-    //self.prev_step = step_size;
   }
 
   fn eval(&mut self, epoch_sz: usize, samples: &mut Iterator<Item=S>) {
