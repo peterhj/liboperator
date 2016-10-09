@@ -82,17 +82,19 @@ pub trait DiffOperator<T> {
 
   fn init_param(&mut self, _rng: &mut Self::Rng) {}
   //fn reset_nondiff_param(&mut self) {}
+  fn reset_grad(&mut self) {}
+
   fn store_param(&mut self, _param_writer: &mut WriteBuffer<T>, _offset: usize) -> usize { 0 }
   fn store_nondiff_param(&mut self, _param_writer: &mut WriteBuffer<T>, _offset: usize) -> usize { 0 }
   fn load_param(&mut self, _param_reader: &mut ReadBuffer<T>, _offset: usize) -> usize { 0 }
   fn load_nondiff_param(&mut self, _param_reader: &mut ReadBuffer<T>, _offset: usize) -> usize { 0 }
   fn update_param(&mut self, _alpha: f32, _beta: f32, _grad_reader: &mut ReadAccumulateBuffer<T>, _offset: usize) -> usize { 0 }
+
   fn update_nondiff_param(&mut self, _iter: usize) {}
 
-  fn reset_grad(&mut self) {}
   fn store_grad(&mut self, _grad_writer: &mut WriteBuffer<T>, _offset: usize) -> usize { 0 }
   fn accumulate_grad(&mut self, _alpha: f32, _beta: f32, _grad_accum: &mut AccumulateBuffer<T>, _offset: usize) -> usize { 0 }
-  fn grad_step(&mut self, _alpha: f32, _beta: f32) {}
+  //fn grad_step(&mut self, _alpha: f32, _beta: f32) {}
 
   fn reset_loss(&mut self) {}
   fn store_loss(&mut self) -> f32 { 0.0 }

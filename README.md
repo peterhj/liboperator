@@ -19,8 +19,8 @@ and provides an interface for the following tasks:
 - random initialization of the parameter
 - forward computation of the operator's underlying function
 - backward propagation to compute gradients
-- R-forward and R-backward propagation to compute Jacobian- and Hessian-vector
-  products
+- R-forward and R-backward propagation to compute directional gradients (useful
+  for Jacobian- and Hessian-vector products)
 
 ### I/O
 
