@@ -1,5 +1,4 @@
 use super::{DiffOperatorInput, CheckpointFormat, OpPhase};
-use data::{SampleWeight};
 use rw::{ReadBuffer, WriteBuffer};
 
 use densearray::{Reshape, ReshapeMut};

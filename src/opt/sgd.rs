@@ -1,5 +1,4 @@
 use prelude::*;
-use data::{SampleWeight};
 use opt::{
   ClassOptStats,
   //AdaptiveStepSizeState,
@@ -63,7 +62,7 @@ impl SgdAdaptiveState {
   }
 
   pub fn search<S, R, Op>(&mut self, iter_counter: usize, cache: &mut Vec<S>, operator: &mut Op, frozen_param_sav: &[f32], frozen_grad_acc: &[f32], samples: &mut Iterator<Item=S>) -> f32
-  where Op: DiffOperatorInput<f32, S, Rng=R>, S: SampleWeight, R: Rng {
+  where Op: DiffOperatorInput<f32, S, Rng=R>, S: SampleLossWeight<ClassLoss>, R: Rng {
     let num_batches = (self.minibatch_sz + self.batch_sz - 1) / self.batch_sz;
     cache.clear();
     for mut sample in samples.take(self.minibatch_sz * self.test_iters) {
@@ -247,7 +246,7 @@ impl<S, R, Op> SgdWorker<f32, S, R, Op> where R: Rng, Op: DiffOperatorInput<f32,
   }
 }
 
-impl<S, R, Op> OptWorker<f32, S> for SgdWorker<f32, S, R, Op> where S: SampleWeight, R: Rng, Op: DiffOperatorInput<f32, S, Rng=R> {
+impl<S, R, Op> OptWorker<f32, S> for SgdWorker<f32, S, R, Op> where S: SampleLossWeight<ClassLoss>, R: Rng, Op: DiffOperatorInput<f32, S, Rng=R> {
   type Rng = R;
 
   fn init_param(&mut self, rng: &mut Op::Rng) {
@@ -359,7 +358,7 @@ impl<S, R, Op> OptWorker<f32, S> for SgdWorker<f32, S, R, Op> where S: SampleWei
   }
 }
 
-impl<S, R, Op> OptStats<ClassOptStats> for SgdWorker<f32, S, R, Op> where S: SampleWeight, R: Rng, Op: DiffOperatorInput<f32, S> {
+impl<S, R, Op> OptStats<ClassOptStats> for SgdWorker<f32, S, R, Op> where S: SampleLossWeight<ClassLoss>, R: Rng, Op: DiffOperatorInput<f32, S> {
   fn reset_opt_stats(&mut self) {
     self.stats_it = 0;
     self.stats.sample_count = 0;

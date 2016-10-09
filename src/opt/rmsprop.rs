@@ -1,5 +1,4 @@
 use prelude::*;
-use data::{SampleWeight};
 use opt::{GradientMomentum, NesterovParamState, ClassOptStats};
 use rw::{ReadBuffer, WriteBuffer, AccumulateBuffer};
 
@@ -97,7 +96,7 @@ impl<S, R, Op> RmspropWorker<f32, S, R, Op> where R: Rng, Op: DiffOperatorInput<
   }
 }
 
-impl<S, R, Op> OptWorker<f32, S> for RmspropWorker<f32, S, R, Op> where S: SampleWeight, R: Rng, Op: DiffOperatorInput<f32, S, Rng=R> {
+impl<S, R, Op> OptWorker<f32, S> for RmspropWorker<f32, S, R, Op> where S: SampleLossWeight<ClassLoss>, R: Rng, Op: DiffOperatorInput<f32, S, Rng=R> {
   type Rng = R;
 
   fn init_param(&mut self, rng: &mut Op::Rng) {
@@ -220,7 +219,7 @@ impl<S, R, Op> OptWorker<f32, S> for RmspropWorker<f32, S, R, Op> where S: Sampl
   }
 }
 
-impl<S, R, Op> OptStats<ClassOptStats> for RmspropWorker<f32, S, R, Op> where S: SampleWeight, R: Rng, Op: DiffOperatorInput<f32, S> {
+impl<S, R, Op> OptStats<ClassOptStats> for RmspropWorker<f32, S, R, Op> where S: SampleLossWeight<ClassLoss>, R: Rng, Op: DiffOperatorInput<f32, S> {
   fn reset_opt_stats(&mut self) {
     self.stats_it = 0;
     self.stats.sample_count = 0;
