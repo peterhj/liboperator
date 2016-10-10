@@ -1,5 +1,5 @@
 use prelude::*;
-use opt::{GradientMomentum, NesterovParamState, ClassOptStats};
+use opt::{NesterovParamState, ClassOptStats};
 use rw::{ReadBuffer, WriteBuffer, AccumulateBuffer};
 
 use densearray::{Reshape, ReshapeMut};

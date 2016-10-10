@@ -86,7 +86,7 @@ pub struct SharedSyncSgdWorker<T, S, R, Op> where R: Rng, Op: DiffOperatorInput<
   _marker:      PhantomData<R>,
 }
 
-impl<S, R, Op> OptWorker<f32, S> for SharedSyncSgdWorker<f32, S, R, Op> where S: SampleLossWeight<ClassLoss>, R: Rng, Op: DiffOperatorInput<f32, S, Rng=R> {
+impl<S, R, Op> OptWorker<f32, S> for SharedSyncSgdWorker<f32, S, R, Op> where R: Rng, Op: DiffOperatorInput<f32, S, Rng=R> {
   type Rng = R;
 
   fn init_param(&mut self, rng: &mut Op::Rng) {
@@ -130,14 +130,14 @@ impl<S, R, Op> OptWorker<f32, S> for SharedSyncSgdWorker<f32, S, R, Op> where S:
 
     self.cache.clear();
     for mut sample in samples.take(self.cfg.minibatch_sz) {
-      sample.mix_weight(1.0 / self.cfg.minibatch_sz as f32);
+      //sample.mix_weight(1.0 / self.cfg.minibatch_sz as f32);
       self.cache.push(sample);
     }
 
     self.operator.save_rng_state();
     self.operator.reset_loss();
     self.operator.reset_grad();
-    if let Some(mu) = self.cfg.momentum {
+    if let Some(GradientMomentum::Nesterov(mu)) = self.cfg.momentum {
       self.operator.update_param(mu, 1.0, &mut self.grad_acc, 0);
     }
     for batch in 0 .. num_batches {
@@ -147,11 +147,16 @@ impl<S, R, Op> OptWorker<f32, S> for SharedSyncSgdWorker<f32, S, R, Op> where S:
       self.operator.forward(OpPhase::Learning);
       self.operator.backward();
     }
-    if let Some(_) = self.cfg.momentum {
+    if let Some(lambda) = self.cfg.l2_reg {
+      self.operator.apply_grad_reg(Regularization::L2(lambda));
+    }
+    self.operator.update_nondiff_param(self.iter_counter);
+
+    if let Some(GradientMomentum::Nesterov(_)) = self.cfg.momentum {
       self.operator.load_param(&mut self.param_saved, 0);
     }
     self.operator.store_grad(&mut self.grad, 0);
-    let loss = self.operator.store_loss();
+    let loss = self.operator.store_loss() / self.cfg.minibatch_sz as f32;
 
     if self.worker_rank == 0 {
       let mut shared_grad = self.shared_grad.lock().unwrap();
@@ -160,29 +165,32 @@ impl<S, R, Op> OptWorker<f32, S> for SharedSyncSgdWorker<f32, S, R, Op> where S:
     self.shared_bar.wait();
     {
       let mut shared_grad = self.shared_grad.lock().unwrap();
-      shared_grad.reshape_mut(self.grad_sz).vector_add(1.0 / self.num_workers as f32, self.grad.reshape(self.grad_sz));
+      shared_grad.reshape_mut(self.grad_sz).vector_add(1.0, self.grad.reshape(self.grad_sz));
     }
     self.shared_bar.wait();
     {
       let shared_grad = self.shared_grad.lock().unwrap();
       self.grad.copy_from_slice(&shared_grad);
     }
+    //println!("DEBUG: shared sync sgd: |g|: {:e}", self.grad.reshape(self.grad_sz).l2_norm());
 
-    if let Some(mu) = self.cfg.momentum {
+    if let Some(GradientMomentum::HeavyBall(mu)) = self.cfg.momentum {
+      self.grad_acc.reshape_mut(self.grad_sz).vector_scale(mu);
+    } else if let Some(GradientMomentum::Nesterov(mu)) = self.cfg.momentum {
       self.grad_acc.reshape_mut(self.grad_sz).vector_scale(mu);
     } else {
       self.grad_acc.reshape_mut(self.grad_sz).set_constant(0.0);
     }
-    self.grad_acc.reshape_mut(self.grad_sz).vector_add(-step_size, self.grad.reshape(self.grad_sz));
+    self.grad_acc.reshape_mut(self.grad_sz).vector_add(-step_size / (self.cfg.minibatch_sz * self.num_workers) as f32, self.grad.reshape(self.grad_sz));
 
     self.operator.update_param(1.0, 1.0, &mut self.grad_acc, 0);
-    self.operator.update_nondiff_param(self.iter_counter);
     self.operator.store_param(&mut self.param_saved, 0);
 
     self.iter_counter += 1;
 
     self.stats_it += 1;
     self.stats.sample_count += self.cfg.minibatch_sz;
+    self.stats.correct_count += self.operator._store_accuracy();
     self.stats.avg_loss += 1.0 / (self.stats_it as f32) * (loss - self.stats.avg_loss);
   }
 
@@ -190,7 +198,7 @@ impl<S, R, Op> OptWorker<f32, S> for SharedSyncSgdWorker<f32, S, R, Op> where S:
     self.cache.clear();
     self.operator.reset_loss();
     for mut sample in samples.take(epoch_sz) {
-      sample.mix_weight(1.0 / epoch_sz as f32);
+      //sample.mix_weight(1.0 / epoch_sz as f32);
       self.cache.push(sample);
       if self.cache.len() == self.cfg.batch_sz {
         self.operator.load_data(&self.cache);
@@ -202,9 +210,11 @@ impl<S, R, Op> OptWorker<f32, S> for SharedSyncSgdWorker<f32, S, R, Op> where S:
       self.operator.load_data(&self.cache);
       self.operator.forward(OpPhase::Inference);
     }
+    let loss = self.operator.store_loss() / epoch_sz as f32;
     self.stats_it += 1;
     self.stats.sample_count += epoch_sz;
-    self.stats.avg_loss += 1.0 / (self.stats_it as f32) * (self.operator.store_loss() - self.stats.avg_loss);
+    self.stats.correct_count += self.operator._store_accuracy();
+    self.stats.avg_loss += 1.0 / (self.stats_it as f32) * (loss - self.stats.avg_loss);
   }
 }
 

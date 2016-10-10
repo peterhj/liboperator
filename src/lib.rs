@@ -98,6 +98,7 @@ pub trait DiffOperator<T> {
 
   fn reset_loss(&mut self) {}
   fn store_loss(&mut self) -> f32 { 0.0 }
+  fn _store_accuracy(&mut self) -> usize { 0 }
 
   fn apply_grad_reg(&mut self, _reg: Regularization) {}
 

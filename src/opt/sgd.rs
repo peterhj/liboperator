@@ -1,7 +1,7 @@
 use prelude::*;
 use opt::{
-  ClassOptStats,
   //AdaptiveStepSizeState,
+  ClassOptStats,
   adaptive_pow10_step_size_factor,
   adaptive_decimal_step_size_factor,
 };
@@ -16,8 +16,8 @@ use std::marker::{PhantomData};
 struct SgdAdaptiveState {
   batch_sz:     usize,
   minibatch_sz: usize,
-  momentum:     Option<f32>,
-  //momentum:     Option<GradientMomentum>,
+  //momentum:     Option<f32>,
+  momentum:     Option<GradientMomentum>,
   grad_sz:      usize,
   init_step:    f32,
   test_iters:   usize,
@@ -31,7 +31,7 @@ struct SgdAdaptiveState {
 }
 
 impl SgdAdaptiveState {
-  pub fn new(batch_sz: usize, minibatch_sz: usize, momentum: Option<f32>, grad_sz: usize, init_step: f32, test_iters: usize, epoch_iters: usize, sched: AdaptiveStepSizeSchedule) -> SgdAdaptiveState {
+  pub fn new(batch_sz: usize, minibatch_sz: usize, momentum: Option<GradientMomentum>, grad_sz: usize, init_step: f32, test_iters: usize, epoch_iters: usize, sched: AdaptiveStepSizeSchedule) -> SgdAdaptiveState {
     let mut param_sav = Vec::with_capacity(grad_sz);
     for _ in 0 .. grad_sz {
       param_sav.push(0.0);
@@ -74,7 +74,7 @@ impl SgdAdaptiveState {
     self.grad_acc.copy_from_slice(frozen_grad_acc);
 
     let mut rhs = 0.0;
-    if let Some(mu) = self.momentum {
+    if let Some(GradientMomentum::Nesterov(mu)) = self.momentum {
       operator.update_param(mu, 1.0, &mut self.grad_acc, 0);
     }
     operator.save_rng_state();
@@ -88,7 +88,7 @@ impl SgdAdaptiveState {
       }
       rhs += operator.store_loss();
     }
-    if let Some(_) = self.momentum {
+    if let Some(GradientMomentum::Nesterov(_)) = self.momentum {
       operator.load_param(&mut self.param_sav, 0);
     }
     assert!(!rhs.is_nan());
@@ -119,7 +119,7 @@ impl SgdAdaptiveState {
       for i in 0 .. self.test_iters {
         operator.reset_loss();
         operator.reset_grad();
-        if let Some(mu) = self.momentum {
+        if let Some(GradientMomentum::Nesterov(mu)) = self.momentum {
           operator.update_param(mu, 1.0, &mut self.grad_acc, 0);
         }
         for batch in 0 .. num_batches {
@@ -132,11 +132,9 @@ impl SgdAdaptiveState {
         /*if let Some(lambda) = self.l2_reg {
           operator.apply_grad_reg(Regularization::L2(lambda));
         }*/
-        if let Some(_) = self.momentum {
-          operator.load_param(&mut self.param_sav, 0);
-        }
         operator.store_grad(&mut self.grad, 0);
-        if let Some(mu) = self.momentum {
+        if let Some(GradientMomentum::Nesterov(mu)) = self.momentum {
+          operator.load_param(&mut self.param_sav, 0);
           self.grad_acc.reshape_mut(self.grad_sz).vector_scale(mu);
         } else {
           self.grad_acc.reshape_mut(self.grad_sz).set_constant(0.0);
@@ -184,8 +182,8 @@ pub struct SgdConfig {
   pub batch_sz:     usize,
   pub minibatch_sz: usize,
   pub step_size:    StepSize,
-  pub momentum:     Option<f32>,
-  //pub momentum:     Option<GradientMomentum>,
+  //pub momentum:     Option<f32>,
+  pub momentum:     Option<GradientMomentum>,
   pub l2_reg:       Option<f32>,
 }
 
@@ -295,7 +293,7 @@ impl<S, R, Op> OptWorker<f32, S> for SgdWorker<f32, S, R, Op> where S: SampleLos
     self.operator.save_rng_state();
     self.operator.reset_loss();
     self.operator.reset_grad();
-    if let Some(mu) = self.cfg.momentum {
+    if let Some(GradientMomentum::Nesterov(mu)) = self.cfg.momentum {
       self.operator.update_param(mu, 1.0, &mut self.grad_acc, 0);
     }
     for batch in 0 .. num_batches {
@@ -305,10 +303,12 @@ impl<S, R, Op> OptWorker<f32, S> for SgdWorker<f32, S, R, Op> where S: SampleLos
       self.operator.forward(OpPhase::Learning);
       self.operator.backward();
     }
-    /*if let Some(lambda) = self.cfg.l2_reg {
+    if let Some(lambda) = self.cfg.l2_reg {
       self.operator.apply_grad_reg(Regularization::L2(lambda));
-    }*/
-    if let Some(_) = self.cfg.momentum {
+    }
+    self.operator.update_nondiff_param(self.iter_counter);
+
+    if let Some(GradientMomentum::Nesterov(_)) = self.cfg.momentum {
       self.operator.load_param(&mut self.param_saved, 0);
     }
     self.operator.store_grad(&mut self.grad, 0);
@@ -317,7 +317,9 @@ impl<S, R, Op> OptWorker<f32, S> for SgdWorker<f32, S, R, Op> where S: SampleLos
     // TODO(20161004): if the loss is NaN, and we are doing adaptive step size,
     // then restart the step size search.
 
-    if let Some(mu) = self.cfg.momentum {
+    if let Some(GradientMomentum::HeavyBall(mu)) = self.cfg.momentum {
+      self.grad_acc.reshape_mut(self.grad_sz).vector_scale(mu);
+    } else if let Some(GradientMomentum::Nesterov(mu)) = self.cfg.momentum {
       self.grad_acc.reshape_mut(self.grad_sz).vector_scale(mu);
     } else {
       self.grad_acc.reshape_mut(self.grad_sz).set_constant(0.0);
@@ -325,7 +327,6 @@ impl<S, R, Op> OptWorker<f32, S> for SgdWorker<f32, S, R, Op> where S: SampleLos
     self.grad_acc.reshape_mut(self.grad_sz).vector_add(-step_size, self.grad.reshape(self.grad_sz));
 
     self.operator.update_param(1.0, 1.0, &mut self.grad_acc, 0);
-    self.operator.update_nondiff_param(self.iter_counter);
     self.operator.store_param(&mut self.param_saved, 0);
 
     self.iter_counter += 1;
