@@ -334,6 +334,7 @@ impl<S, R, Op> OptWorker<f32, S> for SgdWorker<f32, S, R, Op> where S: SampleLos
 
     self.stats_it += 1;
     self.stats.sample_count += self.cfg.minibatch_sz;
+    self.stats.correct_count += self.operator._store_accuracy();
     self.stats.avg_loss += 1.0 / (self.stats_it as f32) * (loss - self.stats.avg_loss);
   }
 
@@ -355,6 +356,7 @@ impl<S, R, Op> OptWorker<f32, S> for SgdWorker<f32, S, R, Op> where S: SampleLos
     }
     self.stats_it += 1;
     self.stats.sample_count += epoch_sz;
+    self.stats.correct_count += self.operator._store_accuracy();
     self.stats.avg_loss += 1.0 / (self.stats_it as f32) * (self.operator.store_loss() - self.stats.avg_loss);
   }
 }

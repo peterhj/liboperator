@@ -155,7 +155,8 @@ impl<S, R, Op> OptWorker<f32, S> for SharedSyncSgdWorker<f32, S, R, Op> where R:
     if let Some(GradientMomentum::Nesterov(_)) = self.cfg.momentum {
       self.operator.load_param(&mut self.param_saved, 0);
     }
-    self.operator.store_grad(&mut self.grad, 0);
+    //self.operator.store_grad(&mut self.grad, 0);
+    self.operator.accumulate_grad(1.0 / (self.cfg.minibatch_sz * self.num_workers) as f32, 0.0, &mut self.grad, 0);
     let loss = self.operator.store_loss() / self.cfg.minibatch_sz as f32;
 
     if self.worker_rank == 0 {
@@ -181,7 +182,7 @@ impl<S, R, Op> OptWorker<f32, S> for SharedSyncSgdWorker<f32, S, R, Op> where R:
     } else {
       self.grad_acc.reshape_mut(self.grad_sz).set_constant(0.0);
     }
-    self.grad_acc.reshape_mut(self.grad_sz).vector_add(-step_size / (self.cfg.minibatch_sz * self.num_workers) as f32, self.grad.reshape(self.grad_sz));
+    self.grad_acc.reshape_mut(self.grad_sz).vector_add(-step_size, self.grad.reshape(self.grad_sz));
 
     self.operator.update_param(1.0, 1.0, &mut self.grad_acc, 0);
     self.operator.store_param(&mut self.param_saved, 0);
