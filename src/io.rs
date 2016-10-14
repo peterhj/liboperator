@@ -1,13 +1,19 @@
 use std::cmp::{min};
 
-pub trait IoBuffer<Scalar, Target: ?Sized> where Scalar: Copy {
+/*pub trait IoBuffer<Scalar, Target: ?Sized>: ?Sized where Scalar: Copy {
   fn read(&mut self, offset: usize, dst: &mut Target) -> usize;
   fn read_accumulate(&mut self, alpha: Scalar, beta: Scalar, offset: usize, dst: &mut Target) -> usize;
   fn write(&mut self, offset: usize, src: &Target) -> usize;
   fn accumulate(&mut self, alpha: Scalar, beta: Scalar, offset: usize, src: &Target) -> usize;
+}*/
+
+pub trait IoBuffer<Target: ?Sized> {
+  fn read(&mut self, offset: usize, dst: &mut Target) -> usize;
+  fn write(&mut self, offset: usize, src: &Target) -> usize;
 }
 
-impl IoBuffer<f32, [f32]> for Vec<f32> {
+//impl IoBuffer<f32, [f32]> for [f32] {
+impl IoBuffer<[f32]> for [f32] {
   fn read(&mut self, offset: usize, dst: &mut [f32]) -> usize {
     assert!(offset <= self.len());
     let copy_len = min(self.len() - offset, dst.len());
@@ -15,7 +21,7 @@ impl IoBuffer<f32, [f32]> for Vec<f32> {
     copy_len
   }
 
-  fn read_accumulate(&mut self, alpha: f32, beta: f32, offset: usize, dst: &mut [f32]) -> usize {
+  /*fn read_accumulate(&mut self, alpha: f32, beta: f32, offset: usize, dst: &mut [f32]) -> usize {
     assert!(offset <= self.len());
     let copy_len = min(self.len() - offset, dst.len());
     for i in 0 .. copy_len {
@@ -24,7 +30,7 @@ impl IoBuffer<f32, [f32]> for Vec<f32> {
       dst[i] = alpha * x + beta * y;
     }
     copy_len
-  }
+  }*/
 
   fn write(&mut self, offset: usize, src: &[f32]) -> usize {
     assert!(offset <= self.len());
@@ -33,7 +39,7 @@ impl IoBuffer<f32, [f32]> for Vec<f32> {
     copy_len
   }
 
-  fn accumulate(&mut self, alpha: f32, beta: f32, offset: usize, src: &[f32]) -> usize {
+  /*fn accumulate(&mut self, alpha: f32, beta: f32, offset: usize, src: &[f32]) -> usize {
     assert!(offset <= self.len());
     let copy_len = min(self.len() - offset, src.len());
     for i in 0 .. copy_len {
@@ -42,5 +48,5 @@ impl IoBuffer<f32, [f32]> for Vec<f32> {
       self[offset + i] = alpha * x + beta * y;
     }
     copy_len
-  }
+  }*/
 }

@@ -1,3 +1,5 @@
+#![feature(conservative_impl_trait)]
+
 extern crate densearray;
 extern crate rng;
 extern crate sharedmem;
@@ -108,14 +110,19 @@ impl OperatorNode {
   }
 }
 
+pub trait OperatorOutput {
+}
 
 pub trait NewDiffOperator<S>: Operator {
-  type Output;
-  type IoBuf;
+  //type Output;
+  type IoBuf: ?Sized;
 
-  fn _output(&self, arm: usize) -> Self::Output;
-  fn _traverse_fwd(&mut self, _epoch: u64, _apply: &mut FnMut(&mut NewDiffOperator<S, Output=Self::Output, IoBuf=Self::IoBuf>));
-  fn _traverse_bwd(&mut self, _epoch: u64, _apply: &mut FnMut(&mut NewDiffOperator<S, Output=Self::Output, IoBuf=Self::IoBuf>));
+  //fn _op_output(&self, arm: usize) -> impl OperatorOutput;
+  //fn _output(&self, arm: usize) -> Self::Output;
+  fn _traverse_fwd(&mut self, _epoch: u64, _apply: &mut FnMut(&mut NewDiffOperator<S, IoBuf=Self::IoBuf>));
+  fn _traverse_bwd(&mut self, _epoch: u64, _apply: &mut FnMut(&mut NewDiffOperator<S, IoBuf=Self::IoBuf>));
+  //fn _traverse_fwd(&mut self, _epoch: u64, _apply: &mut FnMut(&mut NewDiffOperator<S, Output=Self::Output, IoBuf=Self::IoBuf>));
+  //fn _traverse_bwd(&mut self, _epoch: u64, _apply: &mut FnMut(&mut NewDiffOperator<S, Output=Self::Output, IoBuf=Self::IoBuf>));
 
   fn _diff_param_sz(&self) -> usize { 0 }
   fn _nondiff_param_sz(&self) -> usize { 0 }
@@ -125,11 +132,12 @@ pub trait NewDiffOperator<S>: Operator {
   fn _store_diff_param(&mut self, offset: usize, param_writer: &mut Self::IoBuf) -> usize { 0 }
   fn _store_nondiff_param(&mut self, offset: usize, param_writer: &mut Self::IoBuf) -> usize { 0 }
   fn _store_grad(&mut self, offset: usize, grad_writer: &mut Self::IoBuf) -> usize { 0 }
-  fn _load_data(&mut self, _samples: &[S]) {}
 
   fn _save_rng_state(&mut self) {}
   fn _restore_rng_state(&mut self) {}
 
+  fn _next_iteration(&mut self) {}
+  fn _load_batch(&mut self, _samples: &[S]) {}
   fn _init_param(&mut self, rng: &mut Xorshiftplus128Rng) {}
   fn _update_nondiff_param(&mut self, _iter_nr: usize) {}
   fn _reset_grad(&mut self) {}
@@ -186,7 +194,7 @@ pub trait DiffLoss<S>: NewDiffOperator<S> {
     let epoch = self._next();
     let mut offset = 0;
     self._traverse_fwd(epoch, &mut |op| {
-      offset += op._load_diff_param(offset, param_writer);
+      offset += op._store_diff_param(offset, param_writer);
     });
     offset
   }
@@ -196,7 +204,7 @@ pub trait DiffLoss<S>: NewDiffOperator<S> {
     let epoch = self._next();
     let mut offset = 0;
     self._traverse_fwd(epoch, &mut |op| {
-      offset += op._load_nondiff_param(offset, param_writer);
+      offset += op._store_nondiff_param(offset, param_writer);
     });
     offset
   }
@@ -206,14 +214,19 @@ pub trait DiffLoss<S>: NewDiffOperator<S> {
     let epoch = self._next();
     let mut offset = 0;
     self._traverse_fwd(epoch, &mut |op| {
-      offset += op._load_diff_param(offset, grad_writer);
+      offset += op._store_grad(offset, grad_writer);
     });
     offset
   }
 
-  fn load_data(&mut self, samples: &[S]) {
+  fn next_iteration(&mut self) {
     let epoch = self._next();
-    self._traverse_fwd(epoch, &mut |op| op._load_data(samples));
+    self._traverse_fwd(epoch, &mut |op| op._next_iteration());
+  }
+
+  fn load_batch(&mut self, samples: &[S]) {
+    let epoch = self._next();
+    self._traverse_fwd(epoch, &mut |op| op._load_batch(samples));
   }
 
   fn save_rng_state(&mut self) {

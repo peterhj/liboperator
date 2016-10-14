@@ -1,5 +1,6 @@
 pub use super::{
   DiffOperator, DiffOperatorInput, DiffOperatorOutput, DiffOperatorIo, OpCapability, OpPhase, Regularization,
+  OperatorNode, Operator, NewDiffOperator, DiffLoss,
 };
 pub use data::{
   ClassLoss, RegressLoss, Shape,

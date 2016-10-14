@@ -11,6 +11,7 @@ use std::path::{Path};
 pub mod adam;
 pub mod rmsprop;
 pub mod sgd;
+pub mod sgd_new;
 pub mod shared_sgd;
 
 #[derive(Clone, Copy, Debug)]
