@@ -22,10 +22,10 @@ pub struct SgdConfig {
   //pub l2_reg:       Option<f32>,
 }
 
-pub struct SgdWorker<S, Op> where Op: DiffLoss<S, IoBuf=[f32]> {
+pub struct SgdWorker<S, Loss> where Loss: DiffLoss<S, IoBuf=[f32]> {
   cfg:          SgdConfig,
   iter_counter: usize,
-  operator:     Rc<RefCell<Op>>,
+  operator:     Rc<RefCell<Loss>>,
   cache:        Vec<S>,
   grad_sz:      usize,
   param:        Vec<f32>,
@@ -37,8 +37,8 @@ pub struct SgdWorker<S, Op> where Op: DiffLoss<S, IoBuf=[f32]> {
   //_marker:      PhantomData<R>,
 }
 
-impl<S, Op> SgdWorker<S, Op> where Op: DiffLoss<S, IoBuf=[f32]> {
-  pub fn new(cfg: SgdConfig, operator: Rc<RefCell<Op>>) -> SgdWorker<S, Op> {
+impl<S, Loss> SgdWorker<S, Loss> where Loss: DiffLoss<S, IoBuf=[f32]> {
+  pub fn new(cfg: SgdConfig, operator: Rc<RefCell<Loss>>) -> SgdWorker<S, Loss> {
     let grad_sz = operator.borrow_mut().diff_param_sz();
     let cache = Vec::with_capacity(cfg.minibatch_sz);
     let mut param = Vec::with_capacity(grad_sz);
@@ -66,7 +66,7 @@ impl<S, Op> SgdWorker<S, Op> where Op: DiffLoss<S, IoBuf=[f32]> {
   }
 }
 
-impl<S, Op> OptWorker<f32, S> for SgdWorker<S, Op> where Op: DiffLoss<S, IoBuf=[f32]> {
+impl<S, Loss> OptWorker<f32, S> for SgdWorker<S, Loss> where Loss: DiffLoss<S, IoBuf=[f32]> {
   type Rng = Xorshiftplus128Rng;
 
   fn init_param(&mut self, rng: &mut Xorshiftplus128Rng) {
@@ -114,7 +114,7 @@ impl<S, Op> OptWorker<f32, S> for SgdWorker<S, Op> where Op: DiffLoss<S, IoBuf=[
     if let Some(GradientMomentum::Nesterov(mu)) = self.cfg.momentum {
       //operator.update_diff_param(mu, 1.0, &mut self.grad_acc);
       operator.store_diff_param(&mut self.param);
-      self.param.reshape_mut(self.grad_sz).vector_add(mu, self.grad_acc.reshape(self.grad_sz));
+      self.param.reshape_mut(self.grad_sz).add(mu, self.grad_acc.reshape(self.grad_sz));
       operator.load_diff_param(&mut self.param);
     }
     operator.next_iteration();
@@ -132,21 +132,21 @@ impl<S, Op> OptWorker<f32, S> for SgdWorker<S, Op> where Op: DiffLoss<S, IoBuf=[
     operator.update_nondiff_param(self.iter_counter);
 
     operator.store_grad(&mut self.grad);
-    self.grad.reshape_mut(self.grad_sz).vector_scale(1.0 / self.cfg.minibatch_sz as f32);
+    self.grad.reshape_mut(self.grad_sz).scale(1.0 / self.cfg.minibatch_sz as f32);
     let loss = operator.store_loss() / self.cfg.minibatch_sz as f32;
 
     if let Some(GradientMomentum::HeavyBall(mu)) = self.cfg.momentum {
-      self.grad_acc.reshape_mut(self.grad_sz).vector_scale(mu);
+      self.grad_acc.reshape_mut(self.grad_sz).scale(mu);
     } else if let Some(GradientMomentum::Nesterov(mu)) = self.cfg.momentum {
-      self.grad_acc.reshape_mut(self.grad_sz).vector_scale(mu);
+      self.grad_acc.reshape_mut(self.grad_sz).scale(mu);
     } else {
       self.grad_acc.reshape_mut(self.grad_sz).set_constant(0.0);
     }
-    self.grad_acc.reshape_mut(self.grad_sz).vector_add(-step_size, self.grad.reshape(self.grad_sz));
+    self.grad_acc.reshape_mut(self.grad_sz).add(-step_size, self.grad.reshape(self.grad_sz));
 
     //operator.update_diff_param(1.0, 1.0, &mut self.grad_acc);
     operator.store_diff_param(&mut self.param);
-    self.param.reshape_mut(self.grad_sz).vector_add(1.0, self.grad_acc.reshape(self.grad_sz));
+    self.param.reshape_mut(self.grad_sz).add(1.0, self.grad_acc.reshape(self.grad_sz));
     operator.load_diff_param(&mut self.param);
     operator.store_diff_param(&mut self.param_saved);
 
@@ -183,7 +183,7 @@ impl<S, Op> OptWorker<f32, S> for SgdWorker<S, Op> where Op: DiffLoss<S, IoBuf=[
   }
 }
 
-impl<S, Op> OptStats<ClassOptStats> for SgdWorker<S, Op> where Op: DiffLoss<S, IoBuf=[f32]> {
+impl<S, Loss> OptStats<ClassOptStats> for SgdWorker<S, Loss> where Loss: DiffLoss<S, IoBuf=[f32]> {
   fn reset_opt_stats(&mut self) {
     self.stats_it = 0;
     self.stats.sample_count = 0;
