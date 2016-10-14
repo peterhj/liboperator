@@ -8,13 +8,13 @@ use std::cmp::{min};
 }*/
 
 pub trait IoBuffer<Target: ?Sized> {
-  fn read(&mut self, offset: usize, dst: &mut Target) -> usize;
-  fn write(&mut self, offset: usize, src: &Target) -> usize;
+  fn read_buf(&mut self, offset: usize, dst: &mut Target) -> usize;
+  fn write_buf(&mut self, offset: usize, src: &Target) -> usize;
 }
 
 //impl IoBuffer<f32, [f32]> for [f32] {
 impl IoBuffer<[f32]> for [f32] {
-  fn read(&mut self, offset: usize, dst: &mut [f32]) -> usize {
+  fn read_buf(&mut self, offset: usize, dst: &mut [f32]) -> usize {
     assert!(offset <= self.len());
     let copy_len = min(self.len() - offset, dst.len());
     dst[ .. copy_len].copy_from_slice(&self[offset .. offset + copy_len]);
@@ -32,7 +32,7 @@ impl IoBuffer<[f32]> for [f32] {
     copy_len
   }*/
 
-  fn write(&mut self, offset: usize, src: &[f32]) -> usize {
+  fn write_buf(&mut self, offset: usize, src: &[f32]) -> usize {
     assert!(offset <= self.len());
     let copy_len = min(self.len() - offset, src.len());
     self[offset .. offset + copy_len].copy_from_slice(&src[ .. copy_len]);
