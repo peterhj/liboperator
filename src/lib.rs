@@ -1,3 +1,4 @@
+//#![feature(associated_type_defaults)]
 #![feature(conservative_impl_trait)]
 
 extern crate densearray;
@@ -12,9 +13,10 @@ use rw::{ReadBuffer, ReadAccumulateBuffer, WriteBuffer, AccumulateBuffer};
 use rng::xorshift::{Xorshiftplus128Rng};
 
 use rand::{Rng};
-use std::cell::{Cell};
+use std::cell::{Cell, RefCell};
 use std::io::{Read, Write};
 use std::ops::{Deref};
+use std::rc::{Rc};
 
 pub mod data;
 pub mod io;
@@ -110,19 +112,17 @@ impl OperatorNode {
   }
 }
 
-pub trait OperatorOutput {
-}
+/*pub trait OperatorOutput {
+}*/
 
 pub trait NewDiffOperator<S>: Operator {
-  //type Output;
   type IoBuf: ?Sized;
+  //type OpRef = Rc<RefCell<NewDiffOperator<S, IoBuf=Self::IoBuf, OpRef=Self::OpRef>>>;
 
-  //fn _op_output(&self, arm: usize) -> impl OperatorOutput;
-  //fn _output(&self, arm: usize) -> Self::Output;
   fn _traverse_fwd(&mut self, _epoch: u64, _apply: &mut FnMut(&mut NewDiffOperator<S, IoBuf=Self::IoBuf>));
   fn _traverse_bwd(&mut self, _epoch: u64, _apply: &mut FnMut(&mut NewDiffOperator<S, IoBuf=Self::IoBuf>));
-  //fn _traverse_fwd(&mut self, _epoch: u64, _apply: &mut FnMut(&mut NewDiffOperator<S, Output=Self::Output, IoBuf=Self::IoBuf>));
-  //fn _traverse_bwd(&mut self, _epoch: u64, _apply: &mut FnMut(&mut NewDiffOperator<S, Output=Self::Output, IoBuf=Self::IoBuf>));
+  //fn _traverse_fwd_new(&self, _epoch: u64, _apply: &mut FnMut(Self::OpRef));
+  //fn _traverse_bwd_new(&self, _epoch: u64, _apply: &mut FnMut(Self::OpRef));
 
   fn _diff_param_sz(&self) -> usize { 0 }
   fn _nondiff_param_sz(&self) -> usize { 0 }
