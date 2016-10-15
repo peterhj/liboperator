@@ -5,7 +5,7 @@ use densearray::{Reshape, ReshapeMut};
 
 use rand::{Rng};
 use std::cmp::{min};
-use std::path::{Path};
+use std::path::{Path, PathBuf};
 
 //pub mod adagrad;
 pub mod adam;
@@ -13,6 +13,12 @@ pub mod rmsprop;
 pub mod sgd;
 pub mod sgd_new;
 pub mod shared_sgd;
+
+#[derive(Clone, Debug)]
+pub struct CheckpointConfig {
+  pub prefix:   PathBuf,
+  pub trace:    bool,
+}
 
 #[derive(Clone, Copy, Debug)]
 pub enum StepSize {

@@ -154,7 +154,7 @@ pub trait DiffLoss<S>: NewDiffOperator<S> {
   fn diff_param_sz(&mut self) -> usize {
     let epoch = self._next();
     let mut grad_sz = 0;
-    self._traverse_fwd(epoch, &mut |op| {
+    self._traverse_bwd(epoch, &mut |op| {
       grad_sz += op._diff_param_sz();
     });
     grad_sz
@@ -163,7 +163,7 @@ pub trait DiffLoss<S>: NewDiffOperator<S> {
   fn nondiff_param_sz(&mut self) -> usize {
     let epoch = self._next();
     let mut nondiff_sz = 0;
-    self._traverse_fwd(epoch, &mut |op| {
+    self._traverse_bwd(epoch, &mut |op| {
       nondiff_sz += op._nondiff_param_sz();
     });
     nondiff_sz
@@ -173,7 +173,7 @@ pub trait DiffLoss<S>: NewDiffOperator<S> {
     //param_reader.reset();
     let epoch = self._next();
     let mut offset = 0;
-    self._traverse_fwd(epoch, &mut |op| {
+    self._traverse_bwd(epoch, &mut |op| {
       offset += op._load_diff_param(offset, param_reader);
     });
     offset
@@ -183,7 +183,7 @@ pub trait DiffLoss<S>: NewDiffOperator<S> {
     //param_reader.reset();
     let epoch = self._next();
     let mut offset = 0;
-    self._traverse_fwd(epoch, &mut |op| {
+    self._traverse_bwd(epoch, &mut |op| {
       offset += op._load_nondiff_param(offset, param_reader);
     });
     offset
@@ -193,7 +193,7 @@ pub trait DiffLoss<S>: NewDiffOperator<S> {
     //param_writer.reset();
     let epoch = self._next();
     let mut offset = 0;
-    self._traverse_fwd(epoch, &mut |op| {
+    self._traverse_bwd(epoch, &mut |op| {
       offset += op._store_diff_param(offset, param_writer);
     });
     offset
@@ -203,7 +203,7 @@ pub trait DiffLoss<S>: NewDiffOperator<S> {
     //param_writer.reset();
     let epoch = self._next();
     let mut offset = 0;
-    self._traverse_fwd(epoch, &mut |op| {
+    self._traverse_bwd(epoch, &mut |op| {
       offset += op._store_nondiff_param(offset, param_writer);
     });
     offset
@@ -213,7 +213,7 @@ pub trait DiffLoss<S>: NewDiffOperator<S> {
     //grad_writer.reset();
     let epoch = self._next();
     let mut offset = 0;
-    self._traverse_fwd(epoch, &mut |op| {
+    self._traverse_bwd(epoch, &mut |op| {
       offset += op._store_grad(offset, grad_writer);
     });
     offset
@@ -241,17 +241,17 @@ pub trait DiffLoss<S>: NewDiffOperator<S> {
 
   fn init_param(&mut self, rng: &mut Xorshiftplus128Rng) {
     let epoch = self._next();
-    self._traverse_fwd(epoch, &mut |op| op._init_param(rng));
+    self._traverse_bwd(epoch, &mut |op| op._init_param(rng));
   }
 
   fn update_nondiff_param(&mut self, iter_nr: usize) {
     let epoch = self._next();
-    self._traverse_fwd(epoch, &mut |op| op._update_nondiff_param(iter_nr));
+    self._traverse_bwd(epoch, &mut |op| op._update_nondiff_param(iter_nr));
   }
 
   fn reset_grad(&mut self) {
     let epoch = self._next();
-    self._traverse_fwd(epoch, &mut |op| op._reset_grad());
+    self._traverse_bwd(epoch, &mut |op| op._reset_grad());
   }
 
   fn forward(&mut self, phase: OpPhase) {
