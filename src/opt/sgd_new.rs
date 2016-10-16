@@ -10,20 +10,24 @@ use rng::xorshift::{Xorshiftplus128Rng};
 use rand::{Rng};
 use std::cell::{RefCell};
 use std::cmp::{min};
+use std::fs::{File};
+use std::io::{Write};
 use std::marker::{PhantomData};
 use std::rc::{Rc};
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct SgdConfig {
   pub batch_sz:     usize,
   pub minibatch_sz: usize,
   pub step_size:    StepSize,
   pub momentum:     Option<GradientMomentum>,
-  //pub l2_reg:       Option<f32>,
+  pub checkpoint:   Option<CheckpointConfig>,
 }
 
 pub struct SgdWorker<S, Loss> where Loss: DiffLoss<S, IoBuf=[f32]> {
   cfg:          SgdConfig,
+  config_file:  Option<File>,
+  trace_file:   Option<File>,
   iter_counter: usize,
   operator:     Rc<RefCell<Loss>>,
   cache:        Vec<S>,
@@ -49,8 +53,18 @@ impl<S, Loss> SgdWorker<S, Loss> where Loss: DiffLoss<S, IoBuf=[f32]> {
     grad.resize(grad_sz, 0.0);
     let mut grad_acc = Vec::with_capacity(grad_sz);
     grad_acc.resize(grad_sz, 0.0);
+    let (mut config_file, trace_file) = if let Some(ref checkpoint) = cfg.checkpoint {
+      checkpoint.maybe_create_trace()
+    } else {
+      (None, None)
+    };
+    if let Some(ref mut config_file) = config_file {
+      writeln!(config_file, "{:?}", cfg).unwrap();
+    }
     SgdWorker{
       cfg:          cfg,
+      config_file:  config_file,
+      trace_file:   trace_file,
       iter_counter: 0,
       operator:     operator,
       cache:        cache,
@@ -151,6 +165,10 @@ impl<S, Loss> OptWorker<f32, S> for SgdWorker<S, Loss> where Loss: DiffLoss<S, I
     operator.store_diff_param(&mut self.param_saved);
 
     self.iter_counter += 1;
+
+    if let Some(ref mut trace_file) = self.trace_file {
+      // TODO
+    }
 
     self.stats_it += 1;
     self.stats.sample_count += self.cfg.minibatch_sz;

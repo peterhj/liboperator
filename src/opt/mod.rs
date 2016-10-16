@@ -5,6 +5,8 @@ use densearray::{Reshape, ReshapeMut};
 
 use rand::{Rng};
 use std::cmp::{min};
+use std::fs::{File, create_dir_all};
+use std::io::{Write};
 use std::path::{Path, PathBuf};
 
 //pub mod adagrad;
@@ -18,6 +20,48 @@ pub mod shared_sgd;
 pub struct CheckpointConfig {
   pub prefix:   PathBuf,
   pub trace:    bool,
+}
+
+impl CheckpointConfig {
+  pub fn maybe_create_trace(&self) -> (Option<File>, Option<File>) {
+    let mut cfg_f = None;
+    let mut trace_f = None;
+    let mut idx = 0;
+    loop {
+      let mut config_path = PathBuf::from(&self.prefix);
+      let mut config_filename = format!("trace.cfg.{}", idx);
+      config_path.push(&config_filename);
+      let mut trace_path = PathBuf::from(&self.prefix);
+      let mut trace_filename = format!("trace.log.{}", idx);
+      trace_path.push(&trace_filename);
+      if config_path.exists() {
+        idx += 1;
+        continue;
+      }
+      assert!(!trace_path.exists());
+      create_dir_all(&self.prefix).ok();
+      cfg_f = Some(File::create(&config_path).unwrap());
+      if self.trace {
+        let mut f = File::create(&trace_path).unwrap();
+        writeln!(&mut f, "iter,loss,loss_val,other,other_val,elapsed").unwrap();
+        trace_f = Some(f);
+      }
+      break;
+    }
+    (cfg_f, trace_f)
+  }
+
+  pub fn write_iteration_trace(&self, file: &mut File, iter_nr: usize, loss: f32, valid_loss: Option<f32>, other: f32, valid_other: Option<f32>, elapsed_s: f32) {
+    if valid_loss.is_some() && valid_other.is_some() {
+      writeln!(file, "{},{:.6e},{:.6e},{:.6e},{:.6e},{:.6}", iter_nr, loss, valid_loss.unwrap(), other, valid_other.unwrap(), elapsed_s).unwrap();
+    } else if valid_loss.is_some() {
+      writeln!(file, "{},{:.6e},{:.6e},{:.6e},,{:.6}", iter_nr, loss, valid_loss.unwrap(), other, elapsed_s).unwrap();
+    } else if valid_other.is_some() {
+      writeln!(file, "{},{:.6e},,{:.6e},{:.6e},{:.6}", iter_nr, loss, other, valid_other.unwrap(), elapsed_s).unwrap();
+    } else {
+      writeln!(file, "{},{:.6e},,{:.6e},,{:.6}", iter_nr, loss, other, elapsed_s).unwrap();
+    }
+  }
 }
 
 #[derive(Clone, Copy, Debug)]
