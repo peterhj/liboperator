@@ -8,5 +8,5 @@ pub use data::{
 };
 pub use data::Shape::*;
 pub use opt::{
-  OptWorker, OptStats, CheckpointConfig, StepSize, GradientMomentum, AdaptiveStepSizeSchedule,
+  OptWorker, OptStats, CheckpointConfig, CheckpointState, StepSize, GradientMomentum, AdaptiveStepSizeSchedule,
 };

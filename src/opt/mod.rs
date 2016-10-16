@@ -4,13 +4,14 @@ use rw::{ReadBuffer, WriteBuffer};
 use densearray::{Reshape, ReshapeMut};
 
 use rand::{Rng};
-use std::cmp::{min};
+use std::cmp::{max, min};
 use std::fs::{File, create_dir_all};
 use std::io::{Write};
 use std::path::{Path, PathBuf};
 
 //pub mod adagrad;
 pub mod adam;
+pub mod adam_new;
 pub mod rmsprop;
 pub mod sgd;
 pub mod sgd_new;
@@ -23,32 +24,87 @@ pub struct CheckpointConfig {
 }
 
 impl CheckpointConfig {
-  pub fn maybe_create_trace(&self) -> (Option<File>, Option<File>) {
+  pub fn build_state(&self) -> CheckpointState {
+    create_dir_all(&self.prefix).ok();
+    let mut lo_idx = Some(0);
+    let mut hi_idx = None;
+    let mut idx = 0;
+    while lo_idx != hi_idx {
+      match (lo_idx, hi_idx) {
+        (Some(lo), None) => {
+          idx = lo;
+        }
+        (Some(lo), Some(hi)) => {
+          idx = (lo + hi) / 2;
+        }
+        _ => unreachable!(),
+      }
+      let mut config_path = PathBuf::from(&self.prefix);
+      let mut config_filename = format!("config.{}", idx);
+      config_path.push(&config_filename);
+      if config_path.exists() {
+        match (lo_idx, hi_idx) {
+          (Some(lo), None) => {
+            lo_idx = Some(lo + max(1, lo));
+          }
+          (Some(lo), Some(hi)) => {
+            lo_idx = Some(min(hi, max(lo + 1, idx)));
+          }
+          _ => unreachable!(),
+        }
+      } else {
+        match (lo_idx, hi_idx) {
+          (Some(_), None) => {
+            hi_idx = Some(idx);
+          }
+          (Some(_), Some(_)) => {
+            hi_idx = Some(idx);
+          }
+          _ => unreachable!(),
+        }
+      }
+    }
+    idx = hi_idx.unwrap();
     let mut cfg_f = None;
     let mut trace_f = None;
-    let mut idx = 0;
+    let mut valid_f = None;
     loop {
       let mut config_path = PathBuf::from(&self.prefix);
-      let mut config_filename = format!("trace.cfg.{}", idx);
+      let mut config_filename = format!("config.{}", idx);
       config_path.push(&config_filename);
-      let mut trace_path = PathBuf::from(&self.prefix);
-      let mut trace_filename = format!("trace.log.{}", idx);
-      trace_path.push(&trace_filename);
-      if config_path.exists() {
-        idx += 1;
-        continue;
+      match File::create(&config_path) {
+        Err(_) => {
+          idx += 1;
+          continue;
+        }
+        Ok(f) => {
+          cfg_f = Some(f);
+          break;
+        }
       }
-      assert!(!trace_path.exists());
-      create_dir_all(&self.prefix).ok();
-      cfg_f = Some(File::create(&config_path).unwrap());
-      if self.trace {
-        let mut f = File::create(&trace_path).unwrap();
-        writeln!(&mut f, "iter,loss,loss_val,other,other_val,elapsed").unwrap();
-        trace_f = Some(f);
-      }
-      break;
     }
-    (cfg_f, trace_f)
+    if self.trace {
+      let mut train_path = PathBuf::from(&self.prefix);
+      let mut train_filename = format!("train.log.{}", idx);
+      train_path.push(&train_filename);
+      assert!(!train_path.exists());
+      let mut f = File::create(&train_path).unwrap();
+      writeln!(&mut f, "iter,loss,other,elapsed,clock").unwrap();
+      trace_f = Some(f);
+
+      let mut valid_path = PathBuf::from(&self.prefix);
+      let mut valid_filename = format!("valid.log.{}", idx);
+      valid_path.push(&valid_filename);
+      assert!(!valid_path.exists());
+      let mut f = File::create(&valid_path).unwrap();
+      writeln!(&mut f, "iter,val_loss,val_other,clock").unwrap();
+      valid_f = Some(f);
+    }
+    CheckpointState{
+      config_file:  cfg_f,
+      train_file:   trace_f,
+      valid_file:   valid_f,
+    }
   }
 
   pub fn write_iteration_trace(&self, file: &mut File, iter_nr: usize, loss: f32, valid_loss: Option<f32>, other: f32, valid_other: Option<f32>, elapsed_s: f32) {
@@ -62,6 +118,18 @@ impl CheckpointConfig {
       writeln!(file, "{},{:.6e},,{:.6e},,{:.6}", iter_nr, loss, other, elapsed_s).unwrap();
     }
   }
+}
+
+#[derive(Default)]
+pub struct CheckpointState {
+  pub config_file:  Option<File>,
+  pub train_file:   Option<File>,
+  pub valid_file:   Option<File>,
+}
+
+pub trait TraceRecord {
+  fn loss(&self) -> f32;
+  fn other(&self) -> f32;
 }
 
 #[derive(Clone, Copy, Debug)]

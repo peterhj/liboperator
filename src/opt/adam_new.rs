@@ -16,16 +16,19 @@ use std::marker::{PhantomData};
 use std::rc::{Rc};
 
 #[derive(Clone, Debug)]
-pub struct SgdConfig {
+pub struct AdamConfig {
   pub batch_sz:     usize,
   pub minibatch_sz: usize,
   pub step_size:    StepSize,
-  pub momentum:     Option<GradientMomentum>,
+  //pub momentum:     Option<GradientMomentum>,
+  pub gamma1:       f32,
+  pub gamma2:       f32,
+  pub epsilon:      f32,
   pub checkpoint:   Option<CheckpointConfig>,
 }
 
-pub struct SgdWorker<S, Loss> where Loss: DiffLoss<S, IoBuf=[f32]> {
-  cfg:          SgdConfig,
+pub struct AdamWorker<S, Loss> where Loss: DiffLoss<S, IoBuf=[f32]> {
+  cfg:          AdamConfig,
   checkpoint:   CheckpointState,
   iter_counter: usize,
   operator:     Rc<RefCell<Loss>>,
@@ -35,13 +38,15 @@ pub struct SgdWorker<S, Loss> where Loss: DiffLoss<S, IoBuf=[f32]> {
   param_saved:  Vec<f32>,
   grad:         Vec<f32>,
   grad_acc:     Vec<f32>,
+  grad_var_acc: Vec<f32>,
+  tmp_buf:      Vec<f32>,
   stats_it:     usize,
   stats:        ClassOptStats,
   //_marker:      PhantomData<R>,
 }
 
-impl<S, Loss> SgdWorker<S, Loss> where Loss: DiffLoss<S, IoBuf=[f32]> {
-  pub fn new(cfg: SgdConfig, operator: Rc<RefCell<Loss>>) -> SgdWorker<S, Loss> {
+impl<S, Loss> AdamWorker<S, Loss> where Loss: DiffLoss<S, IoBuf=[f32]> {
+  pub fn new(cfg: AdamConfig, operator: Rc<RefCell<Loss>>) -> AdamWorker<S, Loss> {
     let grad_sz = operator.borrow_mut().diff_param_sz();
     let cache = Vec::with_capacity(cfg.minibatch_sz);
     let mut param = Vec::with_capacity(grad_sz);
@@ -52,6 +57,10 @@ impl<S, Loss> SgdWorker<S, Loss> where Loss: DiffLoss<S, IoBuf=[f32]> {
     grad.resize(grad_sz, 0.0);
     let mut grad_acc = Vec::with_capacity(grad_sz);
     grad_acc.resize(grad_sz, 0.0);
+    let mut grad_var_acc = Vec::with_capacity(grad_sz);
+    grad_var_acc.resize(grad_sz, 0.0);
+    let mut tmp_buf = Vec::with_capacity(grad_sz);
+    tmp_buf.resize(grad_sz, 0.0);
     let mut checkpoint = CheckpointState::default();
     if let Some(ref chk_cfg) = cfg.checkpoint {
       checkpoint = chk_cfg.build_state();
@@ -59,7 +68,7 @@ impl<S, Loss> SgdWorker<S, Loss> where Loss: DiffLoss<S, IoBuf=[f32]> {
     if let Some(ref mut config_file) = checkpoint.config_file {
       writeln!(config_file, "{:?}", cfg).unwrap();
     }
-    SgdWorker{
+    AdamWorker{
       cfg:          cfg,
       checkpoint:   checkpoint,
       iter_counter: 0,
@@ -70,6 +79,8 @@ impl<S, Loss> SgdWorker<S, Loss> where Loss: DiffLoss<S, IoBuf=[f32]> {
       param_saved:  param_saved,
       grad:         grad,
       grad_acc:     grad_acc,
+      grad_var_acc: grad_var_acc,
+      tmp_buf:      tmp_buf,
       stats_it:     0,
       stats:        Default::default(),
       //_marker:      PhantomData,
@@ -77,7 +88,7 @@ impl<S, Loss> SgdWorker<S, Loss> where Loss: DiffLoss<S, IoBuf=[f32]> {
   }
 }
 
-impl<S, Loss> OptWorker<f32, S> for SgdWorker<S, Loss> where Loss: DiffLoss<S, IoBuf=[f32]> {
+impl<S, Loss> OptWorker<f32, S> for AdamWorker<S, Loss> where Loss: DiffLoss<S, IoBuf=[f32]> {
   type Rng = Xorshiftplus128Rng;
 
   fn init_param(&mut self, rng: &mut Xorshiftplus128Rng) {
@@ -113,7 +124,6 @@ impl<S, Loss> OptWorker<f32, S> for SgdWorker<S, Loss> where Loss: DiffLoss<S, I
 
     self.cache.clear();
     for mut sample in samples.take(self.cfg.minibatch_sz) {
-      //sample.mix_weight(1.0 / self.cfg.minibatch_sz as f32);
       self.cache.push(sample);
     }
 
@@ -122,12 +132,6 @@ impl<S, Loss> OptWorker<f32, S> for SgdWorker<S, Loss> where Loss: DiffLoss<S, I
     operator.save_rng_state();
     operator.reset_loss();
     operator.reset_grad();
-    if let Some(GradientMomentum::Nesterov(mu)) = self.cfg.momentum {
-      //operator.update_diff_param(mu, 1.0, &mut self.grad_acc);
-      operator.store_diff_param(&mut self.param);
-      self.param.reshape_mut(self.grad_sz).add(mu, self.grad_acc.reshape(self.grad_sz));
-      operator.load_diff_param(&mut self.param);
-    }
     operator.next_iteration();
     for batch in 0 .. num_batches {
       let batch_start = batch * self.cfg.batch_sz;
@@ -136,28 +140,29 @@ impl<S, Loss> OptWorker<f32, S> for SgdWorker<S, Loss> where Loss: DiffLoss<S, I
       operator.forward(OpPhase::Learning);
       operator.backward();
     }
-    if let Some(GradientMomentum::Nesterov(_)) = self.cfg.momentum {
-      operator.load_diff_param(&mut self.param_saved);
-    }
-
     operator.update_nondiff_param(self.iter_counter);
 
     operator.store_grad(&mut self.grad);
     self.grad.reshape_mut(self.grad_sz).scale(1.0 / self.cfg.minibatch_sz as f32);
     let loss = operator.store_loss() / self.cfg.minibatch_sz as f32;
 
-    if let Some(GradientMomentum::HeavyBall(mu)) = self.cfg.momentum {
-      self.grad_acc.reshape_mut(self.grad_sz).scale(mu);
-    } else if let Some(GradientMomentum::Nesterov(mu)) = self.cfg.momentum {
-      self.grad_acc.reshape_mut(self.grad_sz).scale(mu);
-    } else {
-      self.grad_acc.reshape_mut(self.grad_sz).set_constant(0.0);
-    }
-    self.grad_acc.reshape_mut(self.grad_sz).add(-step_size, self.grad.reshape(self.grad_sz));
+    self.grad_acc.reshape_mut(self.grad_sz).average(self.cfg.gamma1, self.grad.reshape(self.grad_sz));
 
-    //operator.update_diff_param(1.0, 1.0, &mut self.grad_acc);
+    self.tmp_buf.copy_from_slice(&self.grad);
+    self.tmp_buf.reshape_mut(self.grad_sz).square();
+    self.grad_var_acc.reshape_mut(self.grad_sz).average(self.cfg.gamma2, self.tmp_buf.reshape(self.grad_sz));
+
+    let gamma1_norm = 1.0 - (1.0 - self.cfg.gamma1).powi((self.iter_counter + 1) as i32);
+    let gamma2_norm = 1.0 - (1.0 - self.cfg.gamma2).powi((self.iter_counter + 1) as i32);
+    self.tmp_buf.copy_from_slice(&self.grad_var_acc);
+    self.tmp_buf.reshape_mut(self.grad_sz).scale(1.0 / gamma2_norm);
+    self.tmp_buf.reshape_mut(self.grad_sz).sqrt();
+    self.tmp_buf.reshape_mut(self.grad_sz).add_scalar(self.cfg.epsilon);
+    self.tmp_buf.reshape_mut(self.grad_sz).reciprocal();
+    self.tmp_buf.reshape_mut(self.grad_sz).elem_mult(-step_size / gamma1_norm, self.grad_acc.reshape(self.grad_sz));
+
     operator.store_diff_param(&mut self.param);
-    self.param.reshape_mut(self.grad_sz).add(1.0, self.grad_acc.reshape(self.grad_sz));
+    self.param.reshape_mut(self.grad_sz).add(1.0, self.tmp_buf.reshape(self.grad_sz));
     operator.load_diff_param(&mut self.param);
     operator.store_diff_param(&mut self.param_saved);
 
@@ -198,7 +203,7 @@ impl<S, Loss> OptWorker<f32, S> for SgdWorker<S, Loss> where Loss: DiffLoss<S, I
   }
 }
 
-impl<S, Loss> OptStats<ClassOptStats> for SgdWorker<S, Loss> where Loss: DiffLoss<S, IoBuf=[f32]> {
+impl<S, Loss> OptStats<ClassOptStats> for AdamWorker<S, Loss> where Loss: DiffLoss<S, IoBuf=[f32]> {
   fn reset_opt_stats(&mut self) {
     self.stats_it = 0;
     self.stats.sample_count = 0;
