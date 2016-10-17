@@ -10,12 +10,12 @@ use std::io::{Write};
 use std::path::{Path, PathBuf};
 
 //pub mod adagrad;
-pub mod adam;
+//pub mod adam;
 pub mod adam_new;
-pub mod rmsprop;
-pub mod sgd;
+//pub mod rmsprop;
+//pub mod sgd;
 pub mod sgd_new;
-pub mod shared_sgd;
+//pub mod shared_sgd;
 
 #[derive(Clone, Debug)]
 pub struct CheckpointConfig {
@@ -206,9 +206,9 @@ pub trait OptWorker<T, S> {
 
   //fn init_param(&mut self, rng: &mut Xorshiftplus128Rng);
   fn init_param(&mut self, rng: &mut Self::Rng);
-  fn load_local_param(&mut self, param_reader: &mut ReadBuffer<T>);
+  /*fn load_local_param(&mut self, param_reader: &mut ReadBuffer<T>);
   fn store_local_param(&mut self, param_writer: &mut WriteBuffer<T>);
-  fn store_global_param(&mut self, param_writer: &mut WriteBuffer<T>);
+  fn store_global_param(&mut self, param_writer: &mut WriteBuffer<T>);*/
 
   fn step(&mut self, samples: &mut Iterator<Item=S>) /* -> StepStats*/;
   fn eval(&mut self, epoch_size: usize, samples: &mut Iterator<Item=S>);

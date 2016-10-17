@@ -85,7 +85,7 @@ impl<S, Loss> OptWorker<f32, S> for SgdWorker<S, Loss> where Loss: DiffLoss<S, I
     self.operator.borrow_mut().store_diff_param(&mut self.param_saved);
   }
 
-  fn load_local_param(&mut self, param_reader: &mut ReadBuffer<f32>) {
+  /*fn load_local_param(&mut self, param_reader: &mut ReadBuffer<f32>) {
     unimplemented!();
   }
 
@@ -95,7 +95,7 @@ impl<S, Loss> OptWorker<f32, S> for SgdWorker<S, Loss> where Loss: DiffLoss<S, I
 
   fn store_global_param(&mut self, param_writer: &mut WriteBuffer<f32>) {
     unimplemented!();
-  }
+  }*/
 
   fn step(&mut self, samples: &mut Iterator<Item=S>) {
     let num_batches = (self.cfg.minibatch_sz + self.cfg.batch_sz - 1) / self.cfg.batch_sz;

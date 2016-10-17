@@ -17,6 +17,14 @@ pub enum ShapeDesc {
   Frequency,
 }
 
+/*#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum SampleKey {
+  Input,
+  ClassLabel,
+  RegressTarget,
+  Weight,
+}*/
+
 #[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
 pub struct ClassLoss;
 
@@ -24,7 +32,9 @@ pub struct ClassLoss;
 pub struct RegressLoss;
 
 pub trait SampleDatum<U: ?Sized> {
+  fn input(&self) -> Option<&U> { None }
   fn extract_input(&self, _dst: &mut U) -> Result<(), ()> { Err(()) }
+  fn len(&self) -> Option<usize> { None }
   fn shape(&self) -> Option<Shape> { None }
   fn shape_desc(&self) -> Option<ShapeDesc> { None }
 }
