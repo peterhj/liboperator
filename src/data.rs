@@ -1,3 +1,94 @@
+use sharedmem::{SharedSlice};
+use typemap::{TypeMap, Key};
+
+use std::marker::{PhantomData, Reflect};
+use std::rc::{Rc};
+use std::sync::{Arc};
+
+pub trait SampleExtractInput<U: ?Sized> {
+  fn extract_input(&self, output: &mut U) -> Result<usize, ()>;
+}
+
+impl SampleExtractInput<[f32]> for SharedSlice<u8> {
+  fn extract_input(&self, output: &mut [f32]) -> Result<usize, ()> {
+    let len = self.len();
+    assert!(len <= output.len());
+    for (x, y) in (*self).iter().zip(output[ .. len].iter_mut()) {
+      *y = *x as f32;
+    }
+    Ok(len)
+  }
+}
+
+impl SampleExtractInput<[f32]> for SharedSlice<f32> {
+  fn extract_input(&self, output: &mut [f32]) -> Result<usize, ()> {
+    let len = self.len();
+    assert!(len <= output.len());
+    output[ .. len].copy_from_slice(&*self);
+    Ok(len)
+  }
+}
+
+pub struct SampleItem {
+  pub kvs:  TypeMap,
+}
+
+impl SampleItem {
+  pub fn new() -> SampleItem {
+    SampleItem{
+      kvs:  TypeMap::new(),
+    }
+  }
+}
+
+pub struct SampleSharedSliceDataKey<T> where T: 'static + Copy + Reflect {
+  _marker:  PhantomData<T>,
+}
+
+impl<T> Key for SampleSharedSliceDataKey<T> where T: 'static + Copy + Reflect {
+  type Value = SharedSlice<T>;
+}
+
+pub struct SampleExtractInputKey<U: ?Sized> where U: 'static + Reflect {
+  _marker:  PhantomData<U>,
+}
+
+impl<U: ?Sized> Key for SampleExtractInputKey<U> where U: 'static + Reflect {
+  type Value = Rc<SampleExtractInput<U>>;
+}
+
+pub struct SampleSharedExtractInputKey<U: ?Sized> where U: 'static + Reflect {
+  _marker:  PhantomData<U>,
+}
+
+impl<U: ?Sized> Key for SampleSharedExtractInputKey<U> where U: 'static + Reflect {
+  type Value = Arc<SampleExtractInput<U>>;
+}
+
+pub struct SampleInputShape3dKey {}
+
+impl Key for SampleInputShape3dKey {
+  type Value = (usize, usize, usize);
+}
+
+pub struct SampleClassLabelKey {}
+
+impl Key for SampleClassLabelKey {
+  type Value = u32;
+}
+
+pub struct SampleRegressTargetKey {}
+
+impl Key for SampleRegressTargetKey {
+  type Value = f32;
+}
+
+pub struct SampleWeightKey {}
+
+impl Key for SampleWeightKey {
+  type Value = f32;
+}
+
 #[derive(Clone, Debug)]
 pub enum Shape {
   Shape1d(usize),

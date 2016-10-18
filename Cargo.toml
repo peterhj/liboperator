@@ -12,3 +12,4 @@ rand = "*"
 densearray = { path = "../libdensearray" }
 sharedmem = { path = "../libsharedmem" }
 rng = { path = "../librng" }
+typemap = { path = "../rust-typemap" }

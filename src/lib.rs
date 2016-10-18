@@ -1,9 +1,11 @@
 //#![feature(associated_type_defaults)]
-#![feature(conservative_impl_trait)]
+//#![feature(conservative_impl_trait)]
+#![feature(reflect_marker)]
 
 extern crate densearray;
 extern crate rng;
 extern crate sharedmem;
+extern crate typemap;
 
 extern crate rand;
 
