@@ -152,6 +152,7 @@ pub trait DiffLoss<S>: NewDiffOperator<S> {
   fn reset_loss(&mut self);
   fn store_loss(&mut self) -> f32;
   fn _store_accuracy(&mut self) -> usize { 0 }
+  fn _get_pred(&mut self) -> &[f32] { unimplemented!(); }
 
   fn diff_param_sz(&mut self) -> usize {
     let epoch = self._next();

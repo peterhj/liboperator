@@ -16,6 +16,7 @@ pub mod adam_new;
 //pub mod sgd;
 pub mod sgd_new;
 //pub mod shared_sgd;
+pub mod shared_sgd_new;
 
 #[derive(Clone, Debug)]
 pub struct CheckpointConfig {

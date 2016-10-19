@@ -2,10 +2,13 @@ use prelude::*;
 use opt::{
   ClassOptStats,
 };
+use opt::sgd_new::{SgdConfig};
 use rw::{ReadBuffer, WriteBuffer, AccumulateBuffer};
 
 use densearray::{Reshape, ReshapeMut};
 use rng::xorshift::{Xorshiftplus128Rng};
+use sharedmem::{SharedMem};
+use sharedmem::sync::{SpinBarrier};
 
 use rand::{Rng};
 use std::cell::{RefCell};
@@ -14,36 +17,42 @@ use std::fs::{File};
 use std::io::{Write};
 use std::marker::{PhantomData};
 use std::rc::{Rc};
+use std::sync::{Arc, Mutex};
 
-#[derive(Clone, Debug)]
+/*#[derive(Clone, Debug)]
 pub struct SgdConfig {
   pub batch_sz:     usize,
   pub minibatch_sz: usize,
   pub step_size:    StepSize,
   pub momentum:     Option<GradientMomentum>,
   pub checkpoint:   Option<CheckpointConfig>,
-}
+}*/
 
-pub struct SgdWorker<S, Loss> where Loss: DiffLoss<S, IoBuf=[f32]> {
+#[derive(Clone)]
+pub struct SharedSgdBuilder {
   cfg:          SgdConfig,
-  checkpoint:   CheckpointState,
-  iter_counter: usize,
-  operator:     Rc<RefCell<Loss>>,
-  cache:        Vec<S>,
-  grad_sz:      usize,
-  param:        Vec<f32>,
-  param_saved:  Vec<f32>,
-  grad:         Vec<f32>,
-  grad_acc:     Vec<f32>,
-  stats_it:     usize,
-  stats:        ClassOptStats,
-  //_marker:      PhantomData<R>,
+  num_workers:  usize,
+  shared_bar:   Arc<SpinBarrier>,
+  shared_grad:  Arc<Mutex<Vec<f32>>>,
 }
 
-impl<S, Loss> SgdWorker<S, Loss> where Loss: DiffLoss<S, IoBuf=[f32]> {
-  pub fn new(cfg: SgdConfig, operator: Rc<RefCell<Loss>>) -> SgdWorker<S, Loss> {
+impl SharedSgdBuilder {
+  pub fn new(cfg: SgdConfig, num_workers: usize) -> SharedSgdBuilder {
+    SharedSgdBuilder{
+      cfg:          cfg,
+      num_workers:  num_workers,
+      shared_bar:   Arc::new(SpinBarrier::new(num_workers)),
+      shared_grad:  Arc::new(Mutex::new(Vec::with_capacity(1024))),
+    }
+  }
+
+  pub fn into_worker<S, Loss>(self, worker_rank: usize, operator: Rc<RefCell<Loss>>) -> SharedSgdWorker<S, Loss> where Loss: DiffLoss<S, IoBuf=[f32]> {
     let grad_sz = operator.borrow_mut().diff_param_sz();
-    let cache = Vec::with_capacity(cfg.minibatch_sz);
+    if worker_rank == 0 {
+      let mut shared_grad = self.shared_grad.lock().unwrap();
+      shared_grad.resize(grad_sz, 0.0);
+    }
+    let cache = Vec::with_capacity(self.cfg.minibatch_sz);
     let mut param = Vec::with_capacity(grad_sz);
     param.resize(grad_sz, 0.0);
     let mut param_saved = Vec::with_capacity(grad_sz);
@@ -53,19 +62,23 @@ impl<S, Loss> SgdWorker<S, Loss> where Loss: DiffLoss<S, IoBuf=[f32]> {
     let mut grad_acc = Vec::with_capacity(grad_sz);
     grad_acc.resize(grad_sz, 0.0);
     let mut checkpoint = CheckpointState::default();
-    if let Some(ref chk_cfg) = cfg.checkpoint {
+    if let Some(ref chk_cfg) = self.cfg.checkpoint {
       checkpoint = chk_cfg.build_state();
     }
     if let Some(ref mut config_file) = checkpoint.config_file {
-      writeln!(config_file, "{:?}", cfg).unwrap();
+      writeln!(config_file, "{:?}", self.cfg).unwrap();
     }
-    SgdWorker{
-      cfg:          cfg,
+    let worker = SharedSgdWorker{
+      cfg:          self.cfg,
+      worker_rank:  worker_rank,
+      num_workers:  self.num_workers,
       checkpoint:   checkpoint,
       iter_counter: 0,
       operator:     operator,
       cache:        cache,
       grad_sz:      grad_sz,
+      shared_bar:   self.shared_bar,
+      shared_grad:  self.shared_grad,
       param:        param,
       param_saved:  param_saved,
       grad:         grad,
@@ -73,16 +86,53 @@ impl<S, Loss> SgdWorker<S, Loss> where Loss: DiffLoss<S, IoBuf=[f32]> {
       stats_it:     0,
       stats:        Default::default(),
       //_marker:      PhantomData,
-    }
+    };
+    worker.shared_bar.wait();
+    worker
   }
 }
 
-impl<S, Loss> OptWorker<f32, S> for SgdWorker<S, Loss> where Loss: DiffLoss<S, IoBuf=[f32]> {
+pub struct SharedSgdWorker<S, Loss> where Loss: DiffLoss<S, IoBuf=[f32]> {
+  cfg:          SgdConfig,
+  worker_rank:  usize,
+  num_workers:  usize,
+  checkpoint:   CheckpointState,
+  iter_counter: usize,
+  operator:     Rc<RefCell<Loss>>,
+  cache:        Vec<S>,
+  grad_sz:      usize,
+  shared_bar:   Arc<SpinBarrier>,
+  shared_grad:  Arc<Mutex<Vec<f32>>>,
+  param:        Vec<f32>,
+  param_saved:  Vec<f32>,
+  grad:         Vec<f32>,
+  grad_acc:     Vec<f32>,
+  stats_it:     usize,
+  stats:        ClassOptStats,
+  //_marker:      PhantomData<R>,
+}
+
+impl<S, Loss> SharedSgdWorker<S, Loss> where Loss: DiffLoss<S, IoBuf=[f32]> {
+}
+
+impl<S, Loss> OptWorker<f32, S> for SharedSgdWorker<S, Loss> where Loss: DiffLoss<S, IoBuf=[f32]> {
   type Rng = Xorshiftplus128Rng;
 
   fn init_param(&mut self, rng: &mut Xorshiftplus128Rng) {
-    self.operator.borrow_mut().init_param(rng);
-    self.operator.borrow_mut().store_diff_param(&mut self.param_saved);
+    let mut operator = self.operator.borrow_mut();
+    if self.worker_rank == 0 {
+      operator.init_param(rng);
+      operator.store_diff_param(&mut self.param_saved);
+      let mut shared_grad = self.shared_grad.lock().unwrap();
+      shared_grad.copy_from_slice(&self.param_saved);
+    }
+    self.shared_bar.wait();
+    if self.worker_rank != 0 {
+      let shared_grad = self.shared_grad.lock().unwrap();
+      self.param_saved.copy_from_slice(&shared_grad);
+      operator.load_diff_param(&mut self.param_saved);
+    }
+    self.shared_bar.wait();
   }
 
   /*fn load_local_param(&mut self, param_reader: &mut ReadBuffer<f32>) {
@@ -124,10 +174,12 @@ impl<S, Loss> OptWorker<f32, S> for SgdWorker<S, Loss> where Loss: DiffLoss<S, I
     operator.reset_loss();
     operator.reset_grad();
     if let Some(GradientMomentum::Nesterov(mu)) = self.cfg.momentum {
-      //operator.update_diff_param(mu, 1.0, &mut self.grad_acc);
-      operator.store_diff_param(&mut self.param);
+      //operator.store_diff_param(&mut self.param);
+      self.param.copy_from_slice(&self.param_saved);
       self.param.reshape_mut(self.grad_sz).add(mu, self.grad_acc.reshape(self.grad_sz));
       operator.load_diff_param(&mut self.param);
+    } else {
+      operator.load_diff_param(&mut self.param_saved);
     }
     operator.next_iteration();
     for batch in 0 .. num_batches {
@@ -137,15 +189,29 @@ impl<S, Loss> OptWorker<f32, S> for SgdWorker<S, Loss> where Loss: DiffLoss<S, I
       operator.forward(OpPhase::Learning);
       operator.backward();
     }
-    if let Some(GradientMomentum::Nesterov(_)) = self.cfg.momentum {
-      operator.load_diff_param(&mut self.param_saved);
-    }
-
     operator.update_nondiff_param(self.iter_counter);
+    /*if let Some(GradientMomentum::Nesterov(_)) = self.cfg.momentum {
+      operator.load_diff_param(&mut self.param_saved);
+    }*/
 
     operator.store_grad(&mut self.grad);
-    self.grad.reshape_mut(self.grad_sz).scale(1.0 / self.cfg.minibatch_sz as f32);
+    self.grad.reshape_mut(self.grad_sz).scale(1.0 / (self.cfg.minibatch_sz * self.num_workers) as f32);
     let loss = operator.store_loss() / self.cfg.minibatch_sz as f32;
+
+    if self.worker_rank == 0 {
+      let mut shared_grad = self.shared_grad.lock().unwrap();
+      shared_grad.reshape_mut(self.grad_sz).set_constant(0.0);
+    }
+    self.shared_bar.wait();
+    {
+      let mut shared_grad = self.shared_grad.lock().unwrap();
+      shared_grad.reshape_mut(self.grad_sz).vector_add(1.0, self.grad.reshape(self.grad_sz));
+    }
+    self.shared_bar.wait();
+    {
+      let shared_grad = self.shared_grad.lock().unwrap();
+      self.grad.copy_from_slice(&shared_grad);
+    }
 
     if let Some(GradientMomentum::HeavyBall(mu)) = self.cfg.momentum {
       self.grad_acc.reshape_mut(self.grad_sz).scale(mu);
@@ -156,11 +222,11 @@ impl<S, Loss> OptWorker<f32, S> for SgdWorker<S, Loss> where Loss: DiffLoss<S, I
     }
     self.grad_acc.reshape_mut(self.grad_sz).add(-step_size, self.grad.reshape(self.grad_sz));
 
-    //operator.update_diff_param(1.0, 1.0, &mut self.grad_acc);
-    operator.store_diff_param(&mut self.param);
+    //operator.store_diff_param(&mut self.param);
+    self.param.copy_from_slice(&self.param_saved);
     self.param.reshape_mut(self.grad_sz).add(1.0, self.grad_acc.reshape(self.grad_sz));
-    operator.load_diff_param(&mut self.param);
-    operator.store_diff_param(&mut self.param_saved);
+    //operator.load_diff_param(&mut self.param);
+    self.param_saved.copy_from_slice(&self.param);
 
     self.iter_counter += 1;
 
@@ -178,6 +244,7 @@ impl<S, Loss> OptWorker<f32, S> for SgdWorker<S, Loss> where Loss: DiffLoss<S, I
     let mut operator = self.operator.borrow_mut();
     self.cache.clear();
     operator.reset_loss();
+    operator.load_diff_param(&mut self.param_saved);
     for mut sample in samples.take(epoch_sz) {
       //sample.mix_weight(1.0 / epoch_sz as f32);
       self.cache.push(sample);
@@ -199,7 +266,7 @@ impl<S, Loss> OptWorker<f32, S> for SgdWorker<S, Loss> where Loss: DiffLoss<S, I
   }
 }
 
-impl<S, Loss> OptStats<ClassOptStats> for SgdWorker<S, Loss> where Loss: DiffLoss<S, IoBuf=[f32]> {
+impl<S, Loss> OptStats<ClassOptStats> for SharedSgdWorker<S, Loss> where Loss: DiffLoss<S, IoBuf=[f32]> {
   fn reset_opt_stats(&mut self) {
     self.stats_it = 0;
     self.stats.sample_count = 0;
