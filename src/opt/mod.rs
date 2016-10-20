@@ -202,7 +202,7 @@ impl CheckpointState {
       train_path.push(&train_filename);
       assert!(!train_path.exists());
       let mut f = File::create(&train_path).unwrap();
-      writeln!(&mut f, "iter,loss,other,elapsed,clock").unwrap();
+      writeln!(&mut f, "iter,loss,other,elapsed").unwrap();
       trace_f = Some(f);
 
       let mut valid_path = PathBuf::from(&cfg.prefix);
@@ -210,7 +210,7 @@ impl CheckpointState {
       valid_path.push(&valid_filename);
       assert!(!valid_path.exists());
       let mut f = File::create(&valid_path).unwrap();
-      writeln!(&mut f, "iter,val_loss,val_other,clock").unwrap();
+      writeln!(&mut f, "iter,val_loss,val_other,elapsed").unwrap();
       valid_f = Some(f);
     }
     let init_time = Instant::now();

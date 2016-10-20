@@ -123,11 +123,19 @@ impl<S, Loss> OptWorker<f32, S> for SgdWorker<S, Loss> where Loss: DiffLoss<S, I
     operator.save_rng_state();
     operator.reset_loss();
     operator.reset_grad();
-    if let Some(GradientMomentum::Nesterov(mu)) = self.cfg.momentum {
+    /*if let Some(GradientMomentum::Nesterov(mu)) = self.cfg.momentum {
       //operator.update_diff_param(mu, 1.0, &mut self.grad_acc);
       operator.store_diff_param(&mut self.param);
       self.param.reshape_mut(self.grad_sz).add(mu, self.grad_acc.reshape(self.grad_sz));
       operator.load_diff_param(&mut self.param);
+    }*/
+    if let Some(GradientMomentum::Nesterov(mu)) = self.cfg.momentum {
+      //operator.store_diff_param(&mut self.param);
+      self.param.copy_from_slice(&self.param_saved);
+      self.param.reshape_mut(self.grad_sz).add(mu, self.grad_acc.reshape(self.grad_sz));
+      operator.load_diff_param(&mut self.param);
+    } else {
+      operator.load_diff_param(&mut self.param_saved);
     }
     operator.next_iteration();
     for batch in 0 .. num_batches {
@@ -137,9 +145,9 @@ impl<S, Loss> OptWorker<f32, S> for SgdWorker<S, Loss> where Loss: DiffLoss<S, I
       operator.forward(OpPhase::Learning);
       operator.backward();
     }
-    if let Some(GradientMomentum::Nesterov(_)) = self.cfg.momentum {
+    /*if let Some(GradientMomentum::Nesterov(_)) = self.cfg.momentum {
       operator.load_diff_param(&mut self.param_saved);
-    }
+    }*/
 
     operator.update_nondiff_param(self.iter_counter);
 
@@ -156,11 +164,14 @@ impl<S, Loss> OptWorker<f32, S> for SgdWorker<S, Loss> where Loss: DiffLoss<S, I
     }
     self.grad_acc.reshape_mut(self.grad_sz).add(-step_size, self.grad.reshape(self.grad_sz));
 
-    //operator.update_diff_param(1.0, 1.0, &mut self.grad_acc);
+    /*//operator.update_diff_param(1.0, 1.0, &mut self.grad_acc);
     operator.store_diff_param(&mut self.param);
     self.param.reshape_mut(self.grad_sz).add(1.0, self.grad_acc.reshape(self.grad_sz));
     operator.load_diff_param(&mut self.param);
-    operator.store_diff_param(&mut self.param_saved);
+    operator.store_diff_param(&mut self.param_saved);*/
+    self.param.copy_from_slice(&self.param_saved);
+    self.param.reshape_mut(self.grad_sz).add(1.0, self.grad_acc.reshape(self.grad_sz));
+    self.param_saved.copy_from_slice(&self.param);
 
     self.iter_counter += 1;
 
@@ -178,6 +189,7 @@ impl<S, Loss> OptWorker<f32, S> for SgdWorker<S, Loss> where Loss: DiffLoss<S, I
     let mut operator = self.operator.borrow_mut();
     self.cache.clear();
     operator.reset_loss();
+    operator.load_diff_param(&mut self.param_saved);
     for mut sample in samples.take(epoch_sz) {
       //sample.mix_weight(1.0 / epoch_sz as f32);
       self.cache.push(sample);
