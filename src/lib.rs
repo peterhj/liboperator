@@ -268,6 +268,50 @@ pub trait DiffLoss<S>: NewDiffOperator<S> {
   }
 }
 
+pub trait LossReport<Stats> {
+  fn update_stats(&mut self, iter_nr: usize, stats: &mut Stats);
+}
+
+#[derive(Clone, Copy, Default, Debug)]
+pub struct ClassLossStats {
+  pub iter_nr:          usize,
+  pub sample_count:     usize,
+  pub correct_count:    usize,
+  pub accum_loss:       f32,
+}
+
+impl ClassLossStats {
+  pub fn reset(&mut self) {
+    self.iter_nr = 0;
+    self.sample_count = 0;
+    self.correct_count = 0;
+    self.accum_loss = 0.0;
+  }
+
+  pub fn avg_loss(&self) -> f32 {
+    self.accum_loss / self.sample_count as f32
+  }
+
+  pub fn accuracy(&self) -> f32 {
+    self.correct_count as f32 / self.sample_count as f32
+  }
+}
+
+#[derive(Clone, Copy, Default, Debug)]
+pub struct RegressLossStats {
+  pub iter_nr:          usize,
+  pub sample_count:     usize,
+  pub avg_loss:         f32,
+}
+
+impl RegressLossStats {
+  pub fn reset(&mut self) {
+    self.iter_nr = 0;
+    self.sample_count = 0;
+    self.avg_loss = 0.0;
+  }
+}
+
 pub trait DiffOperator<T> {
   type Output;
   type Rng: Rng;

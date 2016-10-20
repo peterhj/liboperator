@@ -21,12 +21,12 @@ pub struct SgdConfig {
   pub minibatch_sz: usize,
   pub step_size:    StepSize,
   pub momentum:     Option<GradientMomentum>,
-  pub checkpoint:   Option<CheckpointConfig>,
+  //pub checkpoint:   Option<CheckpointConfig>,
 }
 
 pub struct SgdWorker<S, Loss> where Loss: DiffLoss<S, IoBuf=[f32]> {
   cfg:          SgdConfig,
-  checkpoint:   CheckpointState,
+  //checkpoint:   CheckpointState,
   iter_counter: usize,
   operator:     Rc<RefCell<Loss>>,
   cache:        Vec<S>,
@@ -52,16 +52,16 @@ impl<S, Loss> SgdWorker<S, Loss> where Loss: DiffLoss<S, IoBuf=[f32]> {
     grad.resize(grad_sz, 0.0);
     let mut grad_acc = Vec::with_capacity(grad_sz);
     grad_acc.resize(grad_sz, 0.0);
-    let mut checkpoint = CheckpointState::default();
+    /*let mut checkpoint = CheckpointState::default();
     if let Some(ref chk_cfg) = cfg.checkpoint {
       checkpoint = chk_cfg.build_state();
     }
     if let Some(ref mut config_file) = checkpoint.config_file {
       writeln!(config_file, "{:?}", cfg).unwrap();
-    }
+    }*/
     SgdWorker{
       cfg:          cfg,
-      checkpoint:   checkpoint,
+      //checkpoint:   checkpoint,
       iter_counter: 0,
       operator:     operator,
       cache:        cache,
@@ -164,9 +164,9 @@ impl<S, Loss> OptWorker<f32, S> for SgdWorker<S, Loss> where Loss: DiffLoss<S, I
 
     self.iter_counter += 1;
 
-    if let Some(ref mut train_file) = self.checkpoint.train_file {
+    /*if let Some(ref mut train_file) = self.checkpoint.train_file {
       // TODO
-    }
+    }*/
 
     self.stats_it += 1;
     self.stats.sample_count += self.cfg.minibatch_sz;
@@ -196,6 +196,13 @@ impl<S, Loss> OptWorker<f32, S> for SgdWorker<S, Loss> where Loss: DiffLoss<S, I
     self.stats.sample_count += epoch_sz;
     self.stats.correct_count += operator._store_accuracy();
     self.stats.avg_loss += 1.0 / (self.stats_it as f32) * (loss - self.stats.avg_loss);
+  }
+}
+
+impl<S, Loss> SgdWorker<S, Loss> where Loss: DiffLoss<S, IoBuf=[f32]> + LossReport<ClassLossStats> {
+  pub fn update_stats(&self, stats: &mut ClassLossStats) {
+    let mut operator = self.operator.borrow_mut();
+    operator.update_stats(self.iter_counter, stats);
   }
 }
 

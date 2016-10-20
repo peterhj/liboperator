@@ -1,13 +1,16 @@
-use super::{DiffOperatorInput, CheckpointFormat, OpPhase};
+use prelude::*;
+use super::{CheckpointFormat};
 use rw::{ReadBuffer, WriteBuffer};
 
 use densearray::{Reshape, ReshapeMut};
 
 use rand::{Rng};
 use std::cmp::{max, min};
+use std::fmt::{Debug};
 use std::fs::{File, create_dir_all};
 use std::io::{Write};
 use std::path::{Path, PathBuf};
+use std::time::{Instant};
 
 //pub mod adagrad;
 //pub mod adam;
@@ -24,7 +27,7 @@ pub struct CheckpointConfig {
   pub trace:    bool,
 }
 
-impl CheckpointConfig {
+/*impl CheckpointConfig {
   pub fn build_state(&self) -> CheckpointState {
     create_dir_all(&self.prefix).ok();
     let mut lo_idx = Some(0);
@@ -102,6 +105,7 @@ impl CheckpointConfig {
       valid_f = Some(f);
     }
     CheckpointState{
+      cfg:          self.clone(),
       config_file:  cfg_f,
       train_file:   trace_f,
       valid_file:   valid_f,
@@ -119,13 +123,135 @@ impl CheckpointConfig {
       writeln!(file, "{},{:.6e},,{:.6e},,{:.6}", iter_nr, loss, other, elapsed_s).unwrap();
     }
   }
-}
+}*/
 
-#[derive(Default)]
+//#[derive(Default)]
 pub struct CheckpointState {
+  pub cfg:          CheckpointConfig,
   pub config_file:  Option<File>,
   pub train_file:   Option<File>,
   pub valid_file:   Option<File>,
+  start_time:   Instant,
+  lap_time:     Instant,
+  elapsed_s:    f64,
+}
+
+impl CheckpointState {
+  pub fn new(cfg: CheckpointConfig) -> CheckpointState {
+    create_dir_all(&cfg.prefix).ok();
+    let mut lo_idx = Some(0);
+    let mut hi_idx = None;
+    let mut idx = 0;
+    while lo_idx != hi_idx {
+      match (lo_idx, hi_idx) {
+        (Some(lo), None) => {
+          idx = lo;
+        }
+        (Some(lo), Some(hi)) => {
+          idx = (lo + hi) / 2;
+        }
+        _ => unreachable!(),
+      }
+      let mut config_path = PathBuf::from(&cfg.prefix);
+      let mut config_filename = format!("config.{}", idx);
+      config_path.push(&config_filename);
+      if config_path.exists() {
+        match (lo_idx, hi_idx) {
+          (Some(lo), None) => {
+            lo_idx = Some(lo + max(1, lo));
+          }
+          (Some(lo), Some(hi)) => {
+            lo_idx = Some(min(hi, max(lo + 1, idx)));
+          }
+          _ => unreachable!(),
+        }
+      } else {
+        match (lo_idx, hi_idx) {
+          (Some(_), None) => {
+            hi_idx = Some(idx);
+          }
+          (Some(_), Some(_)) => {
+            hi_idx = Some(idx);
+          }
+          _ => unreachable!(),
+        }
+      }
+    }
+    idx = hi_idx.unwrap();
+    let mut cfg_f = None;
+    let mut trace_f = None;
+    let mut valid_f = None;
+    loop {
+      let mut config_path = PathBuf::from(&cfg.prefix);
+      let mut config_filename = format!("config.{}", idx);
+      config_path.push(&config_filename);
+      match File::create(&config_path) {
+        Err(_) => {
+          idx += 1;
+          continue;
+        }
+        Ok(f) => {
+          cfg_f = Some(f);
+          break;
+        }
+      }
+    }
+    if cfg.trace {
+      let mut train_path = PathBuf::from(&cfg.prefix);
+      let mut train_filename = format!("train.log.{}", idx);
+      train_path.push(&train_filename);
+      assert!(!train_path.exists());
+      let mut f = File::create(&train_path).unwrap();
+      writeln!(&mut f, "iter,loss,other,elapsed,clock").unwrap();
+      trace_f = Some(f);
+
+      let mut valid_path = PathBuf::from(&cfg.prefix);
+      let mut valid_filename = format!("valid.log.{}", idx);
+      valid_path.push(&valid_filename);
+      assert!(!valid_path.exists());
+      let mut f = File::create(&valid_path).unwrap();
+      writeln!(&mut f, "iter,val_loss,val_other,clock").unwrap();
+      valid_f = Some(f);
+    }
+    let init_time = Instant::now();
+    CheckpointState{
+      cfg:          cfg,
+      config_file:  cfg_f,
+      train_file:   trace_f,
+      valid_file:   valid_f,
+      start_time:   init_time,
+      lap_time:     init_time,
+      elapsed_s:    0.0,
+    }
+  }
+
+  pub fn start_timing(&mut self) {
+    self.start_time = Instant::now();
+  }
+
+  pub fn stop_timing(&mut self) {
+    self.lap_time = Instant::now();
+    let duration = self.lap_time - self.start_time;
+    self.elapsed_s = duration.as_secs() as f64 + 1.0e-9 * duration.subsec_nanos() as f64;
+  }
+
+  pub fn append_config_info<U>(&mut self, info: &U) where U: Debug {
+    if let Some(ref mut config_file) = self.config_file {
+      writeln!(config_file, "{:?}", info).unwrap();
+    }
+  }
+
+  pub fn append_class_stats_train(&mut self, stats: &ClassLossStats) {
+    if let Some(ref mut train_file) = self.train_file {
+      writeln!(train_file, "{},{:.6},{:.6},{:.6}", stats.iter_nr, stats.avg_loss(), stats.accuracy(), self.elapsed_s).unwrap();
+    }
+  }
+
+  pub fn append_class_stats_valid(&mut self, stats: &ClassLossStats) {
+    if let Some(ref mut valid_file) = self.valid_file {
+      writeln!(valid_file, "{},{:.6},{:.6},{:.6}", stats.iter_nr, stats.avg_loss(), stats.accuracy(), self.elapsed_s).unwrap();
+    }
+  }
 }
 
 pub trait TraceRecord {

@@ -61,18 +61,18 @@ impl SharedSgdBuilder {
     grad.resize(grad_sz, 0.0);
     let mut grad_acc = Vec::with_capacity(grad_sz);
     grad_acc.resize(grad_sz, 0.0);
-    let mut checkpoint = CheckpointState::default();
+    /*let mut checkpoint = CheckpointState::default();
     if let Some(ref chk_cfg) = self.cfg.checkpoint {
       checkpoint = chk_cfg.build_state();
     }
     if let Some(ref mut config_file) = checkpoint.config_file {
       writeln!(config_file, "{:?}", self.cfg).unwrap();
-    }
+    }*/
     let worker = SharedSgdWorker{
       cfg:          self.cfg,
       worker_rank:  worker_rank,
       num_workers:  self.num_workers,
-      checkpoint:   checkpoint,
+      //checkpoint:   checkpoint,
       iter_counter: 0,
       operator:     operator,
       cache:        cache,
@@ -96,7 +96,7 @@ pub struct SharedSgdWorker<S, Loss> where Loss: DiffLoss<S, IoBuf=[f32]> {
   cfg:          SgdConfig,
   worker_rank:  usize,
   num_workers:  usize,
-  checkpoint:   CheckpointState,
+  //checkpoint:   CheckpointState,
   iter_counter: usize,
   operator:     Rc<RefCell<Loss>>,
   cache:        Vec<S>,
@@ -230,9 +230,9 @@ impl<S, Loss> OptWorker<f32, S> for SharedSgdWorker<S, Loss> where Loss: DiffLos
 
     self.iter_counter += 1;
 
-    if let Some(ref mut train_file) = self.checkpoint.train_file {
+    /*if let Some(ref mut train_file) = self.checkpoint.train_file {
       // TODO
-    }
+    }*/
 
     self.stats_it += 1;
     self.stats.sample_count += self.cfg.minibatch_sz;

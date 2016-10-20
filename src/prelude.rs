@@ -1,6 +1,6 @@
 pub use super::{
   DiffOperator, DiffOperatorInput, DiffOperatorOutput, DiffOperatorIo, OpCapability, OpPhase, Regularization,
-  OperatorNode, Operator, NewDiffOperator, DiffLoss,
+  OperatorNode, Operator, NewDiffOperator, DiffLoss, LossReport, ClassLossStats, RegressLossStats,
 };
 pub use data::{
   SampleExtractInput,
