@@ -247,6 +247,13 @@ pub trait DiffLoss<S>: NewDiffOperator<S> {
     self._traverse_bwd(epoch, &mut |op| op._init_param(rng));
   }
 
+  fn reset_nondiff_param(&mut self, iter_nr: usize) {
+    let epoch = self._next();
+    // FIXME(20161020)
+    unimplemented!();
+    //self._traverse_bwd(epoch, &mut |op| op._update_nondiff_param(iter_nr));
+  }
+
   fn update_nondiff_param(&mut self, iter_nr: usize) {
     let epoch = self._next();
     self._traverse_bwd(epoch, &mut |op| op._update_nondiff_param(iter_nr));

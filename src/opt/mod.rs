@@ -13,6 +13,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Instant};
 
 //pub mod adagrad;
+pub mod adagrad_new;
 //pub mod adam;
 pub mod adam_new;
 //pub mod rmsprop;
@@ -168,6 +169,7 @@ impl CheckpointState {
       } else {
         match (lo_idx, hi_idx) {
           (Some(_), None) => {
+            lo_idx = Some(idx / 2);
             hi_idx = Some(idx);
           }
           (Some(_), Some(_)) => {
