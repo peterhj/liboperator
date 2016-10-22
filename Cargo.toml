@@ -9,6 +9,8 @@ path = "src/lib.rs"
 
 [dependencies]
 rand = "*"
+rustc-serialize = "*"
+csv = "*"
 densearray = { path = "../libdensearray" }
 sharedmem = { path = "../libsharedmem" }
 rng = { path = "../librng" }

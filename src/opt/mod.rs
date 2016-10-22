@@ -2,9 +2,11 @@ use prelude::*;
 use super::{CheckpointFormat};
 use rw::{ReadBuffer, WriteBuffer};
 
+use csv::{Writer as CsvWriter};
 use densearray::{Reshape, ReshapeMut};
 
 use rand::{Rng};
+use rustc_serialize::{Encodable};
 use std::cmp::{max, min};
 use std::fmt::{Debug};
 use std::fs::{File, create_dir_all};
@@ -28,110 +30,11 @@ pub struct CheckpointConfig {
   pub trace:    bool,
 }
 
-/*impl CheckpointConfig {
-  pub fn build_state(&self) -> CheckpointState {
-    create_dir_all(&self.prefix).ok();
-    let mut lo_idx = Some(0);
-    let mut hi_idx = None;
-    let mut idx = 0;
-    while lo_idx != hi_idx {
-      match (lo_idx, hi_idx) {
-        (Some(lo), None) => {
-          idx = lo;
-        }
-        (Some(lo), Some(hi)) => {
-          idx = (lo + hi) / 2;
-        }
-        _ => unreachable!(),
-      }
-      let mut config_path = PathBuf::from(&self.prefix);
-      let mut config_filename = format!("config.{}", idx);
-      config_path.push(&config_filename);
-      if config_path.exists() {
-        match (lo_idx, hi_idx) {
-          (Some(lo), None) => {
-            lo_idx = Some(lo + max(1, lo));
-          }
-          (Some(lo), Some(hi)) => {
-            lo_idx = Some(min(hi, max(lo + 1, idx)));
-          }
-          _ => unreachable!(),
-        }
-      } else {
-        match (lo_idx, hi_idx) {
-          (Some(_), None) => {
-            hi_idx = Some(idx);
-          }
-          (Some(_), Some(_)) => {
-            hi_idx = Some(idx);
-          }
-          _ => unreachable!(),
-        }
-      }
-    }
-    idx = hi_idx.unwrap();
-    let mut cfg_f = None;
-    let mut trace_f = None;
-    let mut valid_f = None;
-    loop {
-      let mut config_path = PathBuf::from(&self.prefix);
-      let mut config_filename = format!("config.{}", idx);
-      config_path.push(&config_filename);
-      match File::create(&config_path) {
-        Err(_) => {
-          idx += 1;
-          continue;
-        }
-        Ok(f) => {
-          cfg_f = Some(f);
-          break;
-        }
-      }
-    }
-    if self.trace {
-      let mut train_path = PathBuf::from(&self.prefix);
-      let mut train_filename = format!("train.log.{}", idx);
-      train_path.push(&train_filename);
-      assert!(!train_path.exists());
-      let mut f = File::create(&train_path).unwrap();
-      writeln!(&mut f, "iter,loss,other,elapsed,clock").unwrap();
-      trace_f = Some(f);
-
-      let mut valid_path = PathBuf::from(&self.prefix);
-      let mut valid_filename = format!("valid.log.{}", idx);
-      valid_path.push(&valid_filename);
-      assert!(!valid_path.exists());
-      let mut f = File::create(&valid_path).unwrap();
-      writeln!(&mut f, "iter,val_loss,val_other,clock").unwrap();
-      valid_f = Some(f);
-    }
-    CheckpointState{
-      cfg:          self.clone(),
-      config_file:  cfg_f,
-      train_file:   trace_f,
-      valid_file:   valid_f,
-    }
-  }
-
-  pub fn write_iteration_trace(&self, file: &mut File, iter_nr: usize, loss: f32, valid_loss: Option<f32>, other: f32, valid_other: Option<f32>, elapsed_s: f32) {
-    if valid_loss.is_some() && valid_other.is_some() {
-      writeln!(file, "{},{:.6e},{:.6e},{:.6e},{:.6e},{:.6}", iter_nr, loss, valid_loss.unwrap(), other, valid_other.unwrap(), elapsed_s).unwrap();
-    } else if valid_loss.is_some() {
-      writeln!(file, "{},{:.6e},{:.6e},{:.6e},,{:.6}", iter_nr, loss, valid_loss.unwrap(), other, elapsed_s).unwrap();
-    } else if valid_other.is_some() {
-      writeln!(file, "{},{:.6e},,{:.6e},{:.6e},{:.6}", iter_nr, loss, other, valid_other.unwrap(), elapsed_s).unwrap();
-    } else {
-      writeln!(file, "{},{:.6e},,{:.6e},,{:.6}", iter_nr, loss, other, elapsed_s).unwrap();
-    }
-  }
-}*/
-
-//#[derive(Default)]
 pub struct CheckpointState {
   pub cfg:          CheckpointConfig,
   pub config_file:  Option<File>,
-  pub train_file:   Option<File>,
-  pub valid_file:   Option<File>,
+  pub train_file:   Option<CsvWriter<File>>,
+  pub valid_file:   Option<CsvWriter<File>>,
   start_time:   Instant,
   lap_time:     Instant,
   elapsed_s:    f64,
@@ -139,6 +42,10 @@ pub struct CheckpointState {
 
 impl CheckpointState {
   pub fn new(cfg: CheckpointConfig) -> CheckpointState {
+    Self::with_extra_fields(cfg, "")
+  }
+
+  pub fn with_extra_fields(cfg: CheckpointConfig, extra_fields: &str) -> CheckpointState {
     create_dir_all(&cfg.prefix).ok();
     let mut lo_idx = Some(0);
     let mut hi_idx = None;
@@ -204,7 +111,12 @@ impl CheckpointState {
       train_path.push(&train_filename);
       assert!(!train_path.exists());
       let mut f = File::create(&train_path).unwrap();
-      writeln!(&mut f, "iter,loss,other,elapsed").unwrap();
+      //writeln!(&mut f, "iter,loss,other,elapsed").unwrap();
+      if extra_fields.is_empty() {
+        writeln!(&mut f, "iter,loss,accuracy,elapsed").unwrap();
+      } else {
+        writeln!(&mut f, "iter,loss,accuracy,elapsed,{}", extra_fields).unwrap();
+      }
       trace_f = Some(f);
 
       let mut valid_path = PathBuf::from(&cfg.prefix);
@@ -212,15 +124,20 @@ impl CheckpointState {
       valid_path.push(&valid_filename);
       assert!(!valid_path.exists());
       let mut f = File::create(&valid_path).unwrap();
-      writeln!(&mut f, "iter,val_loss,val_other,elapsed").unwrap();
+      //writeln!(&mut f, "iter,val_loss,val_other,elapsed").unwrap();
+      if extra_fields.is_empty() {
+        writeln!(&mut f, "iter,loss,accuracy,elapsed").unwrap();
+      } else {
+        writeln!(&mut f, "iter,loss,accuracy,elapsed,{}", extra_fields).unwrap();
+      }
       valid_f = Some(f);
     }
     let init_time = Instant::now();
     CheckpointState{
       cfg:          cfg,
       config_file:  cfg_f,
-      train_file:   trace_f,
-      valid_file:   valid_f,
+      train_file:   trace_f.map(|f| CsvWriter::from_writer(f)),
+      valid_file:   valid_f.map(|f| CsvWriter::from_writer(f)),
       start_time:   init_time,
       lap_time:     init_time,
       elapsed_s:    0.0,
@@ -237,6 +154,10 @@ impl CheckpointState {
     self.elapsed_s = duration.as_secs() as f64 + 1.0e-9 * duration.subsec_nanos() as f64;
   }
 
+  pub fn elapsed(&self) -> f64 {
+    self.elapsed_s
+  }
+
   pub fn append_config_info<U>(&mut self, info: &U) where U: Debug {
     if let Some(ref mut config_file) = self.config_file {
       writeln!(config_file, "{:?}", info).unwrap();
@@ -244,14 +165,28 @@ impl CheckpointState {
   }
 
   pub fn append_class_stats_train(&mut self, stats: &ClassLossStats) {
+    let elapsed = self.elapsed_s;
+    self.append_train_info(&stats.to_record(elapsed));
+  }
+
+  pub fn append_train_info<Rec>(&mut self, rec: &Rec) where Rec: Encodable {
     if let Some(ref mut train_file) = self.train_file {
-      writeln!(train_file, "{},{:.6},{:.6},{:.6}", stats.iter_nr, stats.avg_loss(), stats.accuracy(), self.elapsed_s).unwrap();
+      //writeln!(train_file, "{},{:.6},{:.6},{:.6}", stats.iter_nr, stats.avg_loss(), stats.accuracy(), self.elapsed_s).unwrap();
+      train_file.encode(rec).unwrap();
+      train_file.flush().unwrap();
     }
   }
 
   pub fn append_class_stats_valid(&mut self, stats: &ClassLossStats) {
+    let elapsed = self.elapsed_s;
+    self.append_valid_info(&stats.to_record(elapsed));
+  }
+
+  pub fn append_valid_info<Rec>(&mut self, rec: &Rec) where Rec: Encodable {
     if let Some(ref mut valid_file) = self.valid_file {
-      writeln!(valid_file, "{},{:.6},{:.6},{:.6}", stats.iter_nr, stats.avg_loss(), stats.accuracy(), self.elapsed_s).unwrap();
+      //writeln!(valid_file, "{},{:.6},{:.6},{:.6}", stats.iter_nr, stats.avg_loss(), stats.accuracy(), self.elapsed_s).unwrap();
+      valid_file.encode(rec).unwrap();
+      valid_file.flush().unwrap();
     }
   }
 }
@@ -261,9 +196,10 @@ pub trait TraceRecord {
   fn other(&self) -> f32;
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub enum StepSize {
   Constant(f32),
+  Custom{init_step: f32, steps: Vec<(usize, f32)>},
   Decay{init_step: f32, step_decay: f32, decay_iters: usize},
   Adaptive{init_step: f32, test_iters: usize, epoch_iters: usize, sched: AdaptiveStepSizeSchedule},
   BacktrackingLineSearch{decay: f32, c: f32},

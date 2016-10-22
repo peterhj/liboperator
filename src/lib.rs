@@ -2,12 +2,14 @@
 //#![feature(conservative_impl_trait)]
 #![feature(reflect_marker)]
 
+extern crate csv;
 extern crate densearray;
 extern crate rng;
 extern crate sharedmem;
 extern crate typemap;
 
 extern crate rand;
+extern crate rustc_serialize;
 
 //use io::{IoBuffer};
 use rw::{ReadBuffer, ReadAccumulateBuffer, WriteBuffer, AccumulateBuffer};
@@ -279,6 +281,14 @@ pub trait LossReport<Stats> {
   fn update_stats(&mut self, iter_nr: usize, stats: &mut Stats);
 }
 
+#[derive(Clone, Copy, Default, Debug, RustcEncodable)]
+pub struct ClassLossRecord {
+  pub iter:     usize,
+  pub loss:     f32,
+  pub accuracy: f32,
+  pub elapsed:  f64,
+}
+
 #[derive(Clone, Copy, Default, Debug)]
 pub struct ClassLossStats {
   pub iter_nr:          usize,
@@ -293,6 +303,15 @@ impl ClassLossStats {
     self.sample_count = 0;
     self.correct_count = 0;
     self.accum_loss = 0.0;
+  }
+
+  pub fn to_record(&self, elapsed: f64) -> ClassLossRecord {
+    ClassLossRecord{
+      iter:     self.iter_nr,
+      loss:     self.avg_loss(),
+      accuracy: self.accuracy(),
+      elapsed:  elapsed,
+    }
   }
 
   pub fn avg_loss(&self) -> f32 {
