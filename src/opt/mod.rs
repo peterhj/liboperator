@@ -5,14 +5,15 @@ use rw::{ReadBuffer, WriteBuffer};
 use csv::{Writer as CsvWriter};
 use densearray::{Reshape, ReshapeMut};
 
-use rand::{Rng};
+use rand::{Rng, thread_rng};
 use rustc_serialize::{Encodable};
 use std::cmp::{max, min};
 use std::fmt::{Debug};
 use std::fs::{File, create_dir_all};
 use std::io::{Write};
 use std::path::{Path, PathBuf};
-use std::time::{Instant};
+use std::thread::{sleep};
+use std::time::{Duration, Instant};
 
 //pub mod adagrad;
 pub mod adagrad_new;
@@ -42,105 +43,98 @@ pub struct CheckpointState {
 
 impl CheckpointState {
   pub fn new(cfg: CheckpointConfig) -> CheckpointState {
-    Self::with_extra_fields(cfg, "")
+    Self::with_fields(cfg, "iter,loss,accuracy,elapsed")
   }
 
-  pub fn with_extra_fields(cfg: CheckpointConfig, extra_fields: &str) -> CheckpointState {
+  pub fn with_fields(cfg: CheckpointConfig, fields: &str) -> CheckpointState {
+    let delay_ns = thread_rng().gen_range(1_000_000, 100_000_000);
+    sleep(Duration::new(0, delay_ns));
     create_dir_all(&cfg.prefix).ok();
-    let mut lo_idx = Some(0);
-    let mut hi_idx = None;
-    let mut idx = 0;
-    while lo_idx != hi_idx {
-      match (lo_idx, hi_idx) {
-        (Some(lo), None) => {
-          idx = lo;
+    loop {
+      let mut lo_idx = Some(0);
+      let mut hi_idx = None;
+      let mut idx = 0;
+      while lo_idx != hi_idx {
+        match (lo_idx, hi_idx) {
+          (Some(lo), None) => {
+            idx = lo;
+          }
+          (Some(lo), Some(hi)) => {
+            idx = (lo + hi) / 2;
+          }
+          _ => unreachable!(),
         }
-        (Some(lo), Some(hi)) => {
-          idx = (lo + hi) / 2;
+        let mut config_path = PathBuf::from(&cfg.prefix);
+        let mut config_filename = format!("config.{}", idx);
+        config_path.push(&config_filename);
+        if config_path.exists() {
+          match (lo_idx, hi_idx) {
+            (Some(lo), None) => {
+              lo_idx = Some(lo + max(1, lo));
+            }
+            (Some(lo), Some(hi)) => {
+              lo_idx = Some(min(hi, max(lo + 1, idx)));
+            }
+            _ => unreachable!(),
+          }
+        } else {
+          match (lo_idx, hi_idx) {
+            (Some(_), None) => {
+              lo_idx = Some(idx / 2);
+              hi_idx = Some(idx);
+            }
+            (Some(_), Some(_)) => {
+              hi_idx = Some(idx);
+            }
+            _ => unreachable!(),
+          }
         }
-        _ => unreachable!(),
       }
+      idx = hi_idx.unwrap();
+      let mut cfg_f = None;
+      let mut trace_f = None;
+      let mut valid_f = None;
       let mut config_path = PathBuf::from(&cfg.prefix);
       let mut config_filename = format!("config.{}", idx);
       config_path.push(&config_filename);
       if config_path.exists() {
-        match (lo_idx, hi_idx) {
-          (Some(lo), None) => {
-            lo_idx = Some(lo + max(1, lo));
-          }
-          (Some(lo), Some(hi)) => {
-            lo_idx = Some(min(hi, max(lo + 1, idx)));
-          }
-          _ => unreachable!(),
-        }
-      } else {
-        match (lo_idx, hi_idx) {
-          (Some(_), None) => {
-            lo_idx = Some(idx / 2);
-            hi_idx = Some(idx);
-          }
-          (Some(_), Some(_)) => {
-            hi_idx = Some(idx);
-          }
-          _ => unreachable!(),
-        }
+        continue;
       }
-    }
-    idx = hi_idx.unwrap();
-    let mut cfg_f = None;
-    let mut trace_f = None;
-    let mut valid_f = None;
-    loop {
-      let mut config_path = PathBuf::from(&cfg.prefix);
-      let mut config_filename = format!("config.{}", idx);
-      config_path.push(&config_filename);
       match File::create(&config_path) {
         Err(_) => {
-          idx += 1;
           continue;
         }
         Ok(f) => {
           cfg_f = Some(f);
-          break;
         }
       }
-    }
-    if cfg.trace {
-      let mut train_path = PathBuf::from(&cfg.prefix);
-      let mut train_filename = format!("train.log.{}", idx);
-      train_path.push(&train_filename);
-      assert!(!train_path.exists());
-      let mut f = File::create(&train_path).unwrap();
-      //writeln!(&mut f, "iter,loss,other,elapsed").unwrap();
-      if extra_fields.is_empty() {
-        writeln!(&mut f, "iter,loss,accuracy,elapsed").unwrap();
-      } else {
-        writeln!(&mut f, "iter,loss,accuracy,elapsed,{}", extra_fields).unwrap();
-      }
-      trace_f = Some(f);
+      if cfg.trace {
+        let mut train_path = PathBuf::from(&cfg.prefix);
+        let mut train_filename = format!("train.log.{}", idx);
+        train_path.push(&train_filename);
+        assert!(!train_path.exists());
+        let mut f = File::create(&train_path).unwrap();
+        writeln!(&mut f, "{}", fields).unwrap();
+        trace_f = Some(f);
 
-      let mut valid_path = PathBuf::from(&cfg.prefix);
-      let mut valid_filename = format!("valid.log.{}", idx);
-      valid_path.push(&valid_filename);
-      assert!(!valid_path.exists());
-      let mut f = File::create(&valid_path).unwrap();
-      //writeln!(&mut f, "iter,val_loss,val_other,elapsed").unwrap();
-      if extra_fields.is_empty() {
-        writeln!(&mut f, "iter,loss,accuracy,elapsed").unwrap();
-      } else {
-        writeln!(&mut f, "iter,loss,accuracy,elapsed,{}", extra_fields).unwrap();
+        let mut valid_path = PathBuf::from(&cfg.prefix);
+        let mut valid_filename = format!("valid.log.{}", idx);
+        valid_path.push(&valid_filename);
+        assert!(!valid_path.exists());
+        let mut f = File::create(&valid_path).unwrap();
+        writeln!(&mut f, "{}", fields).unwrap();
+        valid_f = Some(f);
       }
-      valid_f = Some(f);
-    }
-    let init_time = Instant::now();
-    CheckpointState{
-      cfg:          cfg,
-      config_file:  cfg_f,
-      train_file:   trace_f.map(|f| CsvWriter::from_writer(f)),
-      valid_file:   valid_f.map(|f| CsvWriter::from_writer(f)),
-      start_time:   init_time,
-      lap_time:     init_time,
-      elapsed_s:    0.0,
+      let init_time = Instant::now();
+      return CheckpointState{
+        cfg:          cfg,
+        config_file:  cfg_f,
+        train_file:   trace_f.map(|f| CsvWriter::from_writer(f)),
+        valid_file:   valid_f.map(|f| CsvWriter::from_writer(f)),
+        start_time:   init_time,
+        lap_time:     init_time,
+        elapsed_s:    0.0,
+      };
     }
   }
 
@@ -171,9 +165,8 @@ impl CheckpointState {
 
   pub fn append_train_info<Rec>(&mut self, rec: &Rec) where Rec: Encodable {
     if let Some(ref mut train_file) = self.train_file {
-      //writeln!(train_file, "{},{:.6},{:.6},{:.6}", stats.iter_nr, stats.avg_loss(), stats.accuracy(), self.elapsed_s).unwrap();
       train_file.encode(rec).unwrap();
-      train_file.flush().unwrap();
+      //train_file.flush().unwrap();
     }
   }
 
@@ -184,7 +177,6 @@ impl CheckpointState {
 
   pub fn append_valid_info<Rec>(&mut self, rec: &Rec) where Rec: Encodable {
     if let Some(ref mut valid_file) = self.valid_file {
-      //writeln!(valid_file, "{},{:.6},{:.6},{:.6}", stats.iter_nr, stats.avg_loss(), stats.accuracy(), self.elapsed_s).unwrap();
       valid_file.encode(rec).unwrap();
       valid_file.flush().unwrap();
     }
