@@ -171,7 +171,7 @@ impl CheckpointState {
   pub fn append_train_info<Rec>(&mut self, rec: &Rec) where Rec: Encodable {
     if let Some(ref mut train_file) = self.train_file {
       train_file.encode(rec).unwrap();
-      //train_file.flush().unwrap();
+      train_file.flush().unwrap();
     }
   }
 
