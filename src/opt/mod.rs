@@ -47,8 +47,9 @@ impl CheckpointState {
   }
 
   pub fn with_fields(cfg: CheckpointConfig, fields: &str) -> CheckpointState {
+    let delay_s = thread_rng().gen_range(0, 4);
     let delay_ns = thread_rng().gen_range(100_000_000, 500_000_000);
-    sleep(Duration::new(0, delay_ns));
+    sleep(Duration::new(delay_s, delay_ns));
     create_dir_all(&cfg.prefix).ok();
     loop {
       let mut lo_idx = Some(0);
