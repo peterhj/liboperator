@@ -160,6 +160,7 @@ impl CheckpointState {
   pub fn append_config_info<U>(&mut self, info: &U) where U: Debug {
     if let Some(ref mut config_file) = self.config_file {
       writeln!(config_file, "{:?}", info).unwrap();
+      config_file.flush().unwrap();
     }
   }
 
