@@ -158,10 +158,10 @@ impl<S, Loss> OptWorker<f32, S> for AdamWorker<S, Loss> where Loss: DiffLoss<S, 
     self.tmp_buf.reshape_mut(self.grad_sz).sqrt();
     self.tmp_buf.reshape_mut(self.grad_sz).add_scalar(self.cfg.epsilon);
     self.tmp_buf.reshape_mut(self.grad_sz).reciprocal();
-    self.tmp_buf.reshape_mut(self.grad_sz).elem_mult(-step_size / gamma1_norm, self.grad_acc.reshape(self.grad_sz));
+    self.tmp_buf.reshape_mut(self.grad_sz).elem_mult(self.grad_acc.reshape(self.grad_sz));
 
     operator.store_diff_param(&mut self.param);
-    self.param.reshape_mut(self.grad_sz).add(1.0, self.tmp_buf.reshape(self.grad_sz));
+    self.param.reshape_mut(self.grad_sz).add(-step_size / gamma1_norm, self.tmp_buf.reshape(self.grad_sz));
     operator.load_diff_param(&mut self.param);
     operator.store_diff_param(&mut self.param_saved);
 

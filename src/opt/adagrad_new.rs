@@ -153,10 +153,10 @@ impl<S, Loss> OptWorker<f32, S> for AdagradWorker<S, Loss> where Loss: DiffLoss<
     self.ada_update.reshape_mut(self.grad_sz).add_scalar(self.cfg.epsilon * self.cfg.epsilon);
     self.ada_update.reshape_mut(self.grad_sz).sqrt();
     self.ada_update.reshape_mut(self.grad_sz).reciprocal();
-    self.ada_update.reshape_mut(self.grad_sz).elem_mult(-step_size, self.grad.reshape(self.grad_sz));
+    self.ada_update.reshape_mut(self.grad_sz).elem_mult(self.grad.reshape(self.grad_sz));
 
     self.param.copy_from_slice(&self.param_saved);
-    self.param.reshape_mut(self.grad_sz).add(1.0, self.ada_update.reshape(self.grad_sz));
+    self.param.reshape_mut(self.grad_sz).add(-step_size, self.ada_update.reshape(self.grad_sz));
     self.param_saved.copy_from_slice(&self.param);
     operator.load_diff_param(&mut self.param_saved);
 

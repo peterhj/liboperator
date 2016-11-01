@@ -148,6 +148,17 @@ pub trait NewDiffOperator<S>: Operator {
 
   fn _forward(&mut self, phase: OpPhase);
   fn _backward(&mut self);
+
+  fn _get_input(&mut self) { unimplemented!(); }
+  fn _get_output(&mut self) { unimplemented!(); }
+}
+
+pub trait DiffOperatorRma<S, RmaBuf>: NewDiffOperator<S> {
+  fn _rma_load_diff_param(&mut self, offset: usize, param_reader: &mut RmaBuf) -> usize { 0 }
+  fn _rma_load_nondiff_param(&mut self, offset: usize, param_reader: &mut RmaBuf) -> usize { 0 }
+  fn _rma_store_diff_param(&mut self, offset: usize, param_writer: &mut RmaBuf) -> usize { 0 }
+  fn _rma_store_nondiff_param(&mut self, offset: usize, param_writer: &mut RmaBuf) -> usize { 0 }
+  fn _rma_store_grad(&mut self, offset: usize, grad_writer: &mut RmaBuf) -> usize { 0 }
 }
 
 pub trait DiffLoss<S>: NewDiffOperator<S> {
@@ -155,6 +166,8 @@ pub trait DiffLoss<S>: NewDiffOperator<S> {
   fn store_loss(&mut self) -> f32;
   fn _store_accuracy(&mut self) -> usize { 0 }
   fn _get_pred(&mut self) -> &[f32] { unimplemented!(); }
+  fn _get_target(&mut self) -> &[f32] { unimplemented!(); }
+  fn _get_delta(&mut self) -> &[f32] { unimplemented!(); }
 
   fn diff_param_sz(&mut self) -> usize {
     let epoch = self._next();
