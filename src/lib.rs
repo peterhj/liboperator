@@ -149,16 +149,18 @@ pub trait NewDiffOperator<S>: Operator {
   fn _forward(&mut self, phase: OpPhase);
   fn _backward(&mut self);
 
-  fn _get_input(&mut self) { unimplemented!(); }
-  fn _get_output(&mut self) { unimplemented!(); }
+  fn _dump_input(&mut self) -> Vec<u8> { unimplemented!(); }
+  fn _dump_output(&mut self) -> Vec<u8> { unimplemented!(); }
 }
 
 pub trait DiffOperatorRma<S, RmaBuf>: NewDiffOperator<S> {
-  fn _rma_load_diff_param(&mut self, offset: usize, param_reader: &mut RmaBuf) -> usize { 0 }
+  type Ctx;
+
+  fn _rma_load_diff_param(&mut self, offset: usize, param_reader: &mut RmaBuf, ctx: Self::Ctx) -> usize { 0 }
   fn _rma_load_nondiff_param(&mut self, offset: usize, param_reader: &mut RmaBuf) -> usize { 0 }
-  fn _rma_store_diff_param(&mut self, offset: usize, param_writer: &mut RmaBuf) -> usize { 0 }
+  fn _rma_store_diff_param(&mut self, offset: usize, param_writer: &mut RmaBuf, ctx: Self::Ctx) -> usize { 0 }
   fn _rma_store_nondiff_param(&mut self, offset: usize, param_writer: &mut RmaBuf) -> usize { 0 }
-  fn _rma_store_grad(&mut self, offset: usize, grad_writer: &mut RmaBuf) -> usize { 0 }
+  fn _rma_store_grad(&mut self, offset: usize, grad_writer: &mut RmaBuf, ctx: Self::Ctx) -> usize { 0 }
 }
 
 pub trait DiffLoss<S>: NewDiffOperator<S> {

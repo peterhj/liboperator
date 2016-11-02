@@ -9,6 +9,15 @@ pub trait SampleExtractInput<U: ?Sized> {
   fn extract_input(&self, output: &mut U) -> Result<usize, ()>;
 }
 
+impl SampleExtractInput<[f32]> for Vec<f32> {
+  fn extract_input(&self, output: &mut [f32]) -> Result<usize, ()> {
+    let len = self.len();
+    assert!(len <= output.len());
+    output[ .. len].copy_from_slice(self);
+    Ok(len)
+  }
+}
+
 impl SampleExtractInput<[f32]> for SharedSlice<u8> {
   fn extract_input(&self, output: &mut [f32]) -> Result<usize, ()> {
     let len = self.len();

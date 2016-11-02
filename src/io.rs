@@ -16,7 +16,9 @@ pub trait IoBuffer<Target: ?Sized> {
 impl IoBuffer<[f32]> for [f32] {
   fn read_buf(&mut self, offset: usize, dst: &mut [f32]) -> usize {
     assert!(offset <= self.len());
-    let copy_len = min(self.len() - offset, dst.len());
+    //let copy_len = min(self.len() - offset, dst.len());
+    let copy_len = dst.len();
+    assert!(offset + copy_len <= self.len());
     dst[ .. copy_len].copy_from_slice(&self[offset .. offset + copy_len]);
     copy_len
   }
@@ -34,7 +36,9 @@ impl IoBuffer<[f32]> for [f32] {
 
   fn write_buf(&mut self, offset: usize, src: &[f32]) -> usize {
     assert!(offset <= self.len());
-    let copy_len = min(self.len() - offset, src.len());
+    //let copy_len = min(self.len() - offset, src.len());
+    let copy_len = src.len();
+    assert!(offset + copy_len <= self.len());
     self[offset .. offset + copy_len].copy_from_slice(&src[ .. copy_len]);
     copy_len
   }
