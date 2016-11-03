@@ -21,7 +21,7 @@ pub struct AdamUpdateStep<Loss, S> {
   grad_var_acc: Vec<f32>,
   //diff_acc:     Vec<f32>,
   tmp_buf:      Vec<f32>,
-  _marker:      PhantomData<(Loss, S)>,
+  _marker:      PhantomData<fn (Loss, S)>,
 }
 
 impl<Loss, S> StochasticUpdateStep<Loss, S> for AdamUpdateStep<Loss, S> where Loss: DiffLoss<S, IoBuf=[f32]> {
@@ -55,7 +55,7 @@ impl<Loss, S> StochasticUpdateStep<Loss, S> for AdamUpdateStep<Loss, S> where Lo
     loss.load_diff_param(&mut self.param);
   }
 
-  fn step(&mut self, minibatch_sz: usize, iter_count: usize, loss: &mut Loss, param_saved: &mut [f32]) {
+  fn step(&mut self, minibatch_sz: usize, iter_count: usize, loss: &mut Loss) {
     let step_size = match self.cfg.step_size {
       StepSize::Constant(alpha) => {
         alpha
@@ -81,8 +81,14 @@ impl<Loss, S> StochasticUpdateStep<Loss, S> for AdamUpdateStep<Loss, S> where Lo
     self.tmp_buf.reshape_mut(self.grad_sz).sqrt();
     self.tmp_buf.reshape_mut(self.grad_sz).elem_ldiv(self.grad_acc.reshape(self.grad_sz));
     self.tmp_buf.reshape_mut(self.grad_sz).scale(-step_size * gamma1_scale);
-    self.param.copy_from_slice(param_saved);
     self.param.reshape_mut(self.grad_sz).add(1.0, self.tmp_buf.reshape(self.grad_sz));
-    param_saved.copy_from_slice(&self.param);
+  }
+
+  fn load_param(&mut self, src_param: &mut [f32]) {
+    self.param.copy_from_slice(src_param);
+  }
+
+  fn save_param(&mut self, dst_param: &mut [f32]) {
+    dst_param.copy_from_slice(&self.param);
   }
 }

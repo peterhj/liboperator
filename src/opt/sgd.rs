@@ -17,7 +17,7 @@ pub struct SgdUpdateStep<Loss, S> {
   param_mirror: Vec<f32>,
   grad:         Vec<f32>,
   diff_acc:     Vec<f32>,
-  _marker:      PhantomData<(Loss, S)>,
+  _marker:      PhantomData<fn (Loss, S)>,
 }
 
 impl<Loss, S> StochasticUpdateStep<Loss, S> for SgdUpdateStep<Loss, S> where Loss: DiffLoss<S, IoBuf=[f32]> {
@@ -54,7 +54,7 @@ impl<Loss, S> StochasticUpdateStep<Loss, S> for SgdUpdateStep<Loss, S> where Los
     }
   }
 
-  fn step(&mut self, minibatch_sz: usize, iter_count: usize, loss: &mut Loss, param_saved: &mut [f32]) {
+  fn step(&mut self, minibatch_sz: usize, iter_count: usize, loss: &mut Loss) {
     let step_size = match self.cfg.step_size {
       StepSize::Constant(alpha) => {
         alpha
@@ -70,14 +70,22 @@ impl<Loss, S> StochasticUpdateStep<Loss, S> for SgdUpdateStep<Loss, S> where Los
     self.grad.reshape_mut(self.grad_sz).div_scalar(minibatch_sz as f32);
     if let Some(GradientMomentum::HeavyBall(mu)) = self.cfg.momentum {
       self.diff_acc.reshape_mut(self.grad_sz).scale(mu);
+      self.diff_acc.reshape_mut(self.grad_sz).add(-step_size, self.grad.reshape(self.grad_sz));
+      self.param.reshape_mut(self.grad_sz).add(1.0, self.diff_acc.reshape(self.grad_sz));
     } else if let Some(GradientMomentum::Nesterov(mu)) = self.cfg.momentum {
       self.diff_acc.reshape_mut(self.grad_sz).scale(mu);
+      self.diff_acc.reshape_mut(self.grad_sz).add(-step_size, self.grad.reshape(self.grad_sz));
+      self.param.reshape_mut(self.grad_sz).add(1.0, self.diff_acc.reshape(self.grad_sz));
     } else {
-      self.diff_acc.reshape_mut(self.grad_sz).set_constant(0.0);
+      self.param.reshape_mut(self.grad_sz).add(-step_size, self.grad.reshape(self.grad_sz));
     }
-    self.diff_acc.reshape_mut(self.grad_sz).add(-step_size, self.grad.reshape(self.grad_sz));
-    self.param.copy_from_slice(param_saved);
-    self.param.reshape_mut(self.grad_sz).add(1.0, self.diff_acc.reshape(self.grad_sz));
-    param_saved.copy_from_slice(&self.param);
+  }
+
+  fn load_param(&mut self, src_param: &mut [f32]) {
+    self.param.copy_from_slice(src_param);
+  }
+
+  fn save_param(&mut self, dst_param: &mut [f32]) {
+    dst_param.copy_from_slice(&self.param);
   }
 }

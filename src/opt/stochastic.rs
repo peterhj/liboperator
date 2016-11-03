@@ -14,7 +14,9 @@ pub trait StochasticUpdateStep<Loss, S> where Loss: DiffLoss<S, IoBuf=[f32]> {
 
   fn initialize(cfg: Self::Cfg, loss: &mut Loss) -> Self where Self: Sized;
   fn pre_step(&mut self, loss: &mut Loss);
-  fn step(&mut self, minibatch_sz: usize, iter_count: usize, loss: &mut Loss, param_saved: &mut [f32]);
+  fn step(&mut self, minibatch_sz: usize, iter_count: usize, loss: &mut Loss);
+  fn load_param(&mut self, src_param: &mut [f32]);
+  fn save_param(&mut self, dst_param: &mut [f32]);
 }
 
 pub struct StochasticOptimizer<Update, Loss, S> where Update: StochasticUpdateStep<Loss, S>, Loss: DiffLoss<S, IoBuf=[f32]> {
@@ -54,6 +56,7 @@ impl<Update, Loss, S> StochasticOptimizer<Update, Loss, S> where Update: Stochas
     let mut loss = self.loss.borrow_mut();
     loss.init_param(rng);
     loss.store_diff_param(&mut self.param_saved);
+    self.update_step.load_param(&mut self.param_saved);
     self.dirty_param = false;
   }
 
@@ -73,12 +76,12 @@ impl<Update, Loss, S> StochasticOptimizer<Update, Loss, S> where Update: Stochas
     let num_batches = (self.minibatch_sz + self.batch_sz - 1) / self.batch_sz;
     for batch in 0 .. num_batches {
       let batch_start = batch * self.batch_sz;
-      let batch_end = min((batch+1) * self.batch_sz, self.minibatch_sz);
+      let batch_end = min((batch + 1) * self.batch_sz, self.minibatch_sz);
       loss.load_batch(&self.cache[batch_start .. batch_end]);
       loss.forward(OpPhase::Learning);
       loss.backward();
     }
-    self.update_step.step(self.minibatch_sz, self.iter_count, &mut *loss, &mut self.param_saved);
+    self.update_step.step(self.minibatch_sz, self.iter_count, &mut *loss);
 
     self.iter_count += 1;
     self.cache.clear();
@@ -89,6 +92,7 @@ impl<Update, Loss, S> StochasticOptimizer<Update, Loss, S> where Update: Stochas
     let mut loss = self.loss.borrow_mut();
     loss.reset_loss();
     if self.dirty_param {
+      self.update_step.save_param(&mut self.param_saved);
       loss.load_diff_param(&mut self.param_saved);
       self.dirty_param = false;
     }

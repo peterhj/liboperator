@@ -29,6 +29,10 @@ pub mod prelude;
 pub mod rw;
 pub mod timing;
 
+thread_local! {
+  static OP_NODE_ID_COUNTER: Cell<u16> = Cell::new(0);
+}
+
 #[derive(Clone, Copy)]
 pub enum OpCapability {
   Forward,
@@ -79,15 +83,34 @@ pub trait Operator {
   fn _epoch(&self) -> u64;
 }
 
+#[derive(Clone, Copy, Default)]
+pub struct NodeId(pub u32);
+
+#[derive(Clone, Copy, Default)]
+pub struct Epoch {
+  pub node_id:  NodeId,
+  pub epoch_nr: u64,
+}
+
 #[derive(Clone, Default)]
 pub struct OperatorNode {
   pub curr_epoch:   Cell<u64>,
+  //pub node_id:      Cell<Option<NodeId>>,
+  //pub curr_epoch:   Cell<Epoch>,
   pub curr_count:   Cell<u64>,
 }
 
 impl Operator for OperatorNode {
   fn _next(&self) -> u64 {
-    self.curr_epoch.set(self.curr_epoch.get() + 1);
+    if 0 == self.curr_epoch.get() {
+      OP_NODE_ID_COUNTER.with(|op_node_id_ctr| {
+        op_node_id_ctr.set(op_node_id_ctr.get() + 1);
+        let node_id = op_node_id_ctr.get();
+        assert!(node_id != 0);
+        self.curr_epoch.set(node_id as u64);
+      });
+    }
+    self.curr_epoch.set(self.curr_epoch.get() + 0x10000);
     self.curr_count.set(0);
     self.curr_epoch.get()
   }
@@ -100,7 +123,7 @@ impl Operator for OperatorNode {
 impl OperatorNode {
   pub fn step(&self, next_epoch: u64) {
     assert!(next_epoch >= self.curr_epoch.get());
-    if next_epoch > self.curr_epoch.get() {
+    if next_epoch != self.curr_epoch.get() {
       self.curr_epoch.set(next_epoch);
       self.curr_count.set(0);
     }

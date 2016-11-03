@@ -9,11 +9,40 @@ pub trait SampleExtractInput<U: ?Sized> {
   fn extract_input(&self, output: &mut U) -> Result<usize, ()>;
 }
 
+impl SampleExtractInput<[u8]> for Vec<u8> {
+  fn extract_input(&self, output: &mut [u8]) -> Result<usize, ()> {
+    let len = self.len();
+    assert!(len <= output.len());
+    output[ .. len].copy_from_slice(self);
+    Ok(len)
+  }
+}
+
+impl SampleExtractInput<[f32]> for Vec<u8> {
+  fn extract_input(&self, output: &mut [f32]) -> Result<usize, ()> {
+    let len = self.len();
+    assert!(len <= output.len());
+    for (x, y) in self.iter().zip(output[ .. len].iter_mut()) {
+      *y = *x as f32;
+    }
+    Ok(len)
+  }
+}
+
 impl SampleExtractInput<[f32]> for Vec<f32> {
   fn extract_input(&self, output: &mut [f32]) -> Result<usize, ()> {
     let len = self.len();
     assert!(len <= output.len());
     output[ .. len].copy_from_slice(self);
+    Ok(len)
+  }
+}
+
+impl SampleExtractInput<[u8]> for SharedSlice<u8> {
+  fn extract_input(&self, output: &mut [u8]) -> Result<usize, ()> {
+    let len = self.len();
+    assert!(len <= output.len());
+    output[ .. len].copy_from_slice(&*self);
     Ok(len)
   }
 }
@@ -40,6 +69,12 @@ impl SampleExtractInput<[f32]> for SharedSlice<f32> {
 
 pub trait SampleInputShape<Shape> where Shape: PartialEq + Eq {
   fn input_shape(&self) -> Option<Shape>;
+}
+
+impl SampleInputShape<(usize, usize, usize)> for (usize, usize, usize) {
+  fn input_shape(&self) -> Option<(usize, usize, usize)> {
+    Some(*self)
+  }
 }
 
 pub struct SampleItem {
