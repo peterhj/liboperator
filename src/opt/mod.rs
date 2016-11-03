@@ -1,6 +1,5 @@
 use prelude::*;
 use super::{CheckpointFormat};
-use rw::{ReadBuffer, WriteBuffer};
 
 use csv::{Writer as CsvWriter};
 use densearray::{Reshape, ReshapeMut};
@@ -15,11 +14,11 @@ use std::path::{Path, PathBuf};
 use std::thread::{sleep};
 use std::time::{Duration, Instant};
 
-//pub mod adagrad;
+pub mod adagrad;
 pub mod adagrad_new;
-//pub mod adam;
+pub mod adam;
 pub mod adam_new;
-//pub mod rmsprop;
+pub mod rmsprop;
 pub mod sgd;
 pub mod sgd_new;
 //pub mod shared_sgd;

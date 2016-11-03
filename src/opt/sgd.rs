@@ -1,7 +1,8 @@
 use prelude::*;
-//use opt::stochastic::{StochasticUpdateStep};
 
 use densearray::prelude::*;
+
+use std::marker::{PhantomData};
 
 #[derive(Clone, Debug)]
 pub struct SgdConfig {
@@ -9,62 +10,64 @@ pub struct SgdConfig {
   pub momentum:     Option<GradientMomentum>,
 }
 
-pub struct SgdUpdateStep {
-  minibatch_sz: usize,
+pub struct SgdUpdateStep<Loss, S> {
   cfg:          SgdConfig,
   grad_sz:      usize,
-  iter_count:   usize,
   param:        Vec<f32>,
+  param_mirror: Vec<f32>,
   grad:         Vec<f32>,
   diff_acc:     Vec<f32>,
+  _marker:      PhantomData<(Loss, S)>,
 }
 
-impl StochasticUpdateStep for SgdUpdateStep {
+impl<Loss, S> StochasticUpdateStep<Loss, S> for SgdUpdateStep<Loss, S> where Loss: DiffLoss<S, IoBuf=[f32]> {
   type Cfg = SgdConfig;
 
-  fn initialize<Loss, S>(minibatch_sz: usize, cfg: SgdConfig, loss: &mut Loss) -> SgdUpdateStep where Loss: DiffLoss<S, IoBuf=[f32]> {
+  fn initialize(cfg: SgdConfig, loss: &mut Loss) -> SgdUpdateStep<Loss, S> {
     let grad_sz = loss.diff_param_sz();
     let mut param = Vec::with_capacity(grad_sz);
     param.resize(grad_sz, 0.0);
+    let mut param_mirror = Vec::with_capacity(grad_sz);
+    param_mirror.resize(grad_sz, 0.0);
     let mut grad = Vec::with_capacity(grad_sz);
     grad.resize(grad_sz, 0.0);
     let mut diff_acc = Vec::with_capacity(grad_sz);
     diff_acc.resize(grad_sz, 0.0);
     SgdUpdateStep{
-      minibatch_sz: minibatch_sz,
       cfg:          cfg,
       grad_sz:      grad_sz,
-      iter_count:   0,
       param:        param,
+      param_mirror: param_mirror,
       grad:         grad,
       diff_acc:     diff_acc,
+      _marker:      PhantomData,
     }
   }
 
-  fn pre_step<Loss, S>(&mut self, loss: &mut Loss, param_saved: &mut [f32]) where Loss: DiffLoss<S, IoBuf=[f32]> {
+  fn pre_step(&mut self, loss: &mut Loss) {
     if let Some(GradientMomentum::Nesterov(mu)) = self.cfg.momentum {
-      self.param.copy_from_slice(param_saved);
-      self.param.reshape_mut(self.grad_sz).add(mu, self.diff_acc.reshape(self.grad_sz));
-      loss.load_diff_param(&mut self.param);
+      self.param_mirror.copy_from_slice(&self.param);
+      self.param_mirror.reshape_mut(self.grad_sz).add(mu, self.diff_acc.reshape(self.grad_sz));
+      loss.load_diff_param(&mut self.param_mirror);
     } else {
-      loss.load_diff_param(param_saved);
+      loss.load_diff_param(&mut self.param);
     }
   }
 
-  fn step<Loss, S>(&mut self, loss: &mut Loss, param_saved: &mut [f32]) where Loss: DiffLoss<S, IoBuf=[f32]> {
+  fn step(&mut self, minibatch_sz: usize, iter_count: usize, loss: &mut Loss, param_saved: &mut [f32]) {
     let step_size = match self.cfg.step_size {
       StepSize::Constant(alpha) => {
         alpha
       }
       StepSize::Decay{init_step, step_decay, decay_iters} => {
-        let num_decays = self.iter_count / decay_iters;
+        let num_decays = iter_count / decay_iters;
         init_step * step_decay.powi(num_decays as i32)
       }
       _ => unimplemented!(),
     };
-    loss.update_nondiff_param(self.iter_count);
+    loss.update_nondiff_param(iter_count);
     loss.store_grad(&mut self.grad);
-    self.grad.reshape_mut(self.grad_sz).div_scalar(self.minibatch_sz as f32);
+    self.grad.reshape_mut(self.grad_sz).div_scalar(minibatch_sz as f32);
     if let Some(GradientMomentum::HeavyBall(mu)) = self.cfg.momentum {
       self.diff_acc.reshape_mut(self.grad_sz).scale(mu);
     } else if let Some(GradientMomentum::Nesterov(mu)) = self.cfg.momentum {
@@ -76,6 +79,5 @@ impl StochasticUpdateStep for SgdUpdateStep {
     self.param.copy_from_slice(param_saved);
     self.param.reshape_mut(self.grad_sz).add(1.0, self.diff_acc.reshape(self.grad_sz));
     param_saved.copy_from_slice(&self.param);
-    self.iter_count += 1;
   }
 }
