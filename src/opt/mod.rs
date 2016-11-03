@@ -20,10 +20,11 @@ pub mod adagrad_new;
 //pub mod adam;
 pub mod adam_new;
 //pub mod rmsprop;
-//pub mod sgd;
+pub mod sgd;
 pub mod sgd_new;
 //pub mod shared_sgd;
 pub mod shared_sgd_new;
+pub mod stochastic;
 
 #[derive(Clone, Debug)]
 pub struct CheckpointConfig {

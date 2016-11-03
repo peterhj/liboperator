@@ -4,10 +4,12 @@ pub use super::{
 };
 pub use data::{
   SampleExtractInput,
+  SampleInputShape,
   SampleItem,
   SampleSharedSliceDataKey,
   SampleExtractInputKey,
   SampleSharedExtractInputKey,
+  SampleInputShapeKey,
   SampleInputShape3dKey,
   SampleClassLabelKey,
   SampleRegressTargetKey,
@@ -21,3 +23,4 @@ pub use data::{
 pub use opt::{
   OptWorker, OptStats, CheckpointConfig, CheckpointState, StepSize, GradientMomentum, AdaptiveStepSizeSchedule,
 };
+pub use opt::stochastic::{StochasticUpdateStep, StochasticOptimizer};

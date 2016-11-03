@@ -38,6 +38,10 @@ impl SampleExtractInput<[f32]> for SharedSlice<f32> {
   }
 }
 
+pub trait SampleInputShape<Shape> where Shape: PartialEq + Eq {
+  fn input_shape(&self) -> Option<Shape>;
+}
+
 pub struct SampleItem {
   pub kvs:  TypeMap,
 }
@@ -72,6 +76,22 @@ pub struct SampleSharedExtractInputKey<U: ?Sized> where U: 'static + Reflect {
 
 impl<U: ?Sized> Key for SampleSharedExtractInputKey<U> where U: 'static + Reflect {
   type Value = Arc<SampleExtractInput<U>>;
+}
+
+pub struct SampleInputShapeKey<Shape> where Shape: 'static + PartialEq + Eq {
+  _marker:  PhantomData<Shape>,
+}
+
+impl<Shape> Key for SampleInputShapeKey<Shape> where Shape: 'static + PartialEq + Eq {
+  type Value = Rc<SampleInputShape<Shape>>;
+}
+
+pub struct SampleSharedInputShapeKey<Shape> where Shape: 'static + PartialEq + Eq {
+  _marker:  PhantomData<Shape>,
+}
+
+impl<Shape> Key for SampleSharedInputShapeKey<Shape> where Shape: 'static + PartialEq + Eq {
+  type Value = Arc<SampleInputShape<Shape>>;
 }
 
 pub struct SampleInputShape3dKey {}
