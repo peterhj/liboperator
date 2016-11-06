@@ -1,6 +1,7 @@
 //#![feature(associated_type_defaults)]
 //#![feature(conservative_impl_trait)]
 #![feature(reflect_marker)]
+#![feature(zero_one)]
 
 extern crate csv;
 extern crate densearray;

@@ -12,22 +12,22 @@ pub struct AdamConfig {
   pub epsilon:      f32,
 }
 
-pub struct AdamUpdateStep<Loss, S> {
+pub struct AdamUpdateStep<T, Loss, S> {
   cfg:          AdamConfig,
   grad_sz:      usize,
-  param:        Vec<f32>,
-  grad:         Vec<f32>,
-  grad_acc:     Vec<f32>,
-  grad_var_acc: Vec<f32>,
-  //diff_acc:     Vec<f32>,
-  tmp_buf:      Vec<f32>,
+  param:        Vec<T>,
+  grad:         Vec<T>,
+  grad_acc:     Vec<T>,
+  grad_var_acc: Vec<T>,
+  //diff_acc:     Vec<T>,
+  tmp_buf:      Vec<T>,
   _marker:      PhantomData<fn (Loss, S)>,
 }
 
-impl<Loss, S> StochasticUpdateStep<Loss, S> for AdamUpdateStep<Loss, S> where Loss: DiffLoss<S, IoBuf=[f32]> {
+impl<Loss, S> StochasticUpdateStep<f32, Loss, S> for AdamUpdateStep<f32, Loss, S> where Loss: DiffLoss<S, IoBuf=[f32]> {
   type Cfg = AdamConfig;
 
-  fn initialize(cfg: AdamConfig, loss: &mut Loss) -> AdamUpdateStep<Loss, S> {
+  fn initialize(cfg: AdamConfig, loss: &mut Loss) -> AdamUpdateStep<f32, Loss, S> {
     let grad_sz = loss.diff_param_sz();
     let mut param = Vec::with_capacity(grad_sz);
     param.resize(grad_sz, 0.0);

@@ -10,20 +10,20 @@ pub struct SgdConfig {
   pub momentum:     Option<GradientMomentum>,
 }
 
-pub struct SgdUpdateStep<Loss, S> {
+pub struct SgdUpdateStep<T, Loss, S> where T: Copy {
   cfg:          SgdConfig,
   grad_sz:      usize,
-  param:        Vec<f32>,
-  param_mirror: Vec<f32>,
-  grad:         Vec<f32>,
-  diff_acc:     Vec<f32>,
+  param:        Vec<T>,
+  param_mirror: Vec<T>,
+  grad:         Vec<T>,
+  diff_acc:     Vec<T>,
   _marker:      PhantomData<fn (Loss, S)>,
 }
 
-impl<Loss, S> StochasticUpdateStep<Loss, S> for SgdUpdateStep<Loss, S> where Loss: DiffLoss<S, IoBuf=[f32]> {
+impl<Loss, S> StochasticUpdateStep<f32, Loss, S> for SgdUpdateStep<f32, Loss, S> where Loss: DiffLoss<S, IoBuf=[f32]> {
   type Cfg = SgdConfig;
 
-  fn initialize(cfg: SgdConfig, loss: &mut Loss) -> SgdUpdateStep<Loss, S> {
+  fn initialize(cfg: SgdConfig, loss: &mut Loss) -> SgdUpdateStep<f32, Loss, S> {
     let grad_sz = loss.diff_param_sz();
     let mut param = Vec::with_capacity(grad_sz);
     param.resize(grad_sz, 0.0);

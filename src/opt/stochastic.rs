@@ -7,19 +7,20 @@ use rand::{Rng};
 use std::cell::{RefCell};
 use std::cmp::{min};
 use std::marker::{PhantomData};
+use std::num::{Zero};
 use std::rc::{Rc};
 
-pub trait StochasticUpdateStep<Loss, S> where Loss: DiffLoss<S, IoBuf=[f32]> {
+pub trait StochasticUpdateStep<T, Loss, S> where T: Copy, Loss: DiffLoss<S, IoBuf=[T]> {
   type Cfg: Clone;
 
   fn initialize(cfg: Self::Cfg, loss: &mut Loss) -> Self where Self: Sized;
   fn pre_step(&mut self, loss: &mut Loss);
   fn step(&mut self, minibatch_sz: usize, iter_count: usize, loss: &mut Loss);
-  fn load_param(&mut self, src_param: &mut [f32]);
-  fn save_param(&mut self, dst_param: &mut [f32]);
+  fn load_param(&mut self, src_param: &mut [T]);
+  fn save_param(&mut self, dst_param: &mut [T]);
 }
 
-pub struct StochasticOptimizer<Update, Loss, S> where Update: StochasticUpdateStep<Loss, S>, Loss: DiffLoss<S, IoBuf=[f32]> {
+pub struct StochasticOptimizer<T, Update, Loss, S> where T: Copy, Update: StochasticUpdateStep<T, Loss, S>, Loss: DiffLoss<S, IoBuf=[T]> {
   batch_sz:     usize,
   minibatch_sz: usize,
   grad_sz:      usize,
@@ -28,16 +29,16 @@ pub struct StochasticOptimizer<Update, Loss, S> where Update: StochasticUpdateSt
   loss:         Rc<RefCell<Loss>>,
   cache:        Vec<S>,
   update_step:  Update,
-  param_saved:  Vec<f32>,
+  param_saved:  Vec<T>,
   dirty_param:  bool,
 }
 
-impl<Update, Loss, S> StochasticOptimizer<Update, Loss, S> where Update: StochasticUpdateStep<Loss, S>, Loss: DiffLoss<S, IoBuf=[f32]> {
-  pub fn new(batch_sz: usize, minibatch_sz: usize, cfg: Update::Cfg, loss: Rc<RefCell<Loss>>) -> StochasticOptimizer<Update, Loss, S> {
+impl<T, Update, Loss, S> StochasticOptimizer<T, Update, Loss, S> where T: Copy + Zero, Update: StochasticUpdateStep<T, Loss, S>, Loss: DiffLoss<S, IoBuf=[T]> {
+  pub fn new(batch_sz: usize, minibatch_sz: usize, cfg: Update::Cfg, loss: Rc<RefCell<Loss>>) -> StochasticOptimizer<T, Update, Loss, S> {
     let grad_sz = loss.borrow_mut().diff_param_sz();
     let cache = Vec::with_capacity(minibatch_sz);
     let mut param_saved = Vec::with_capacity(grad_sz);
-    param_saved.resize(grad_sz, 0.0);
+    param_saved.resize(grad_sz, T::zero());
     StochasticOptimizer{
       batch_sz:     batch_sz,
       minibatch_sz: minibatch_sz,
@@ -51,7 +52,9 @@ impl<Update, Loss, S> StochasticOptimizer<Update, Loss, S> where Update: Stochas
       dirty_param:  true,
     }
   }
+}
 
+impl<T, Update, Loss, S> StochasticOptimizer<T, Update, Loss, S> where T: Copy, Update: StochasticUpdateStep<T, Loss, S>, Loss: DiffLoss<S, IoBuf=[T]> {
   pub fn init(&mut self, rng: &mut Xorshiftplus128Rng) {
     let mut loss = self.loss.borrow_mut();
     loss.init_param(rng);

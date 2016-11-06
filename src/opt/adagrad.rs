@@ -10,21 +10,21 @@ pub struct AdagradConfig {
   pub epsilon:      f32,
 }
 
-pub struct AdagradUpdateStep<Loss, S> {
+pub struct AdagradUpdateStep<T, Loss, S> where T: Copy {
   //minibatch_sz: usize,
   cfg:          AdagradConfig,
   grad_sz:      usize,
-  param:        Vec<f32>,
-  grad:         Vec<f32>,
-  grad_var_acc: Vec<f32>,
-  tmp_buf:      Vec<f32>,
+  param:        Vec<T>,
+  grad:         Vec<T>,
+  grad_var_acc: Vec<T>,
+  tmp_buf:      Vec<T>,
   _marker:      PhantomData<fn (Loss, S)>,
 }
 
-impl<Loss, S> StochasticUpdateStep<Loss, S> for AdagradUpdateStep<Loss, S> where Loss: DiffLoss<S, IoBuf=[f32]> {
+impl<Loss, S> StochasticUpdateStep<f32, Loss, S> for AdagradUpdateStep<f32, Loss, S> where Loss: DiffLoss<S, IoBuf=[f32]> {
   type Cfg = AdagradConfig;
 
-  fn initialize(cfg: AdagradConfig, loss: &mut Loss) -> AdagradUpdateStep<Loss, S> {
+  fn initialize(cfg: AdagradConfig, loss: &mut Loss) -> AdagradUpdateStep<f32, Loss, S> {
     let grad_sz = loss.diff_param_sz();
     let mut param = Vec::with_capacity(grad_sz);
     param.resize(grad_sz, 0.0);
