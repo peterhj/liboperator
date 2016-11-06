@@ -79,6 +79,64 @@ pub enum Regularization {
   L2(f32),
 }
 
+pub struct OperatorStackEntry {
+  epoch:    u64,
+  count:    u64,
+}
+
+#[derive(Default)]
+pub struct OperatorStack {
+  curr_epoch:   Cell<u64>,
+  entries:      RefCell<Vec<OperatorStackEntry>>,
+}
+
+impl OperatorStack {
+  pub fn _next(&self) -> u64 {
+    if 0 == self.curr_epoch.get() {
+      OP_NODE_ID_COUNTER.with(|op_node_id_ctr| {
+        op_node_id_ctr.set(op_node_id_ctr.get() + 1);
+        let node_id = op_node_id_ctr.get();
+        assert!(node_id != 0);
+        self.curr_epoch.set(node_id as u64);
+      });
+    }
+    self.curr_epoch.set(self.curr_epoch.get() + 0x10000);
+    self.curr_epoch.get()
+  }
+
+  pub fn _epoch(&self) -> u64 {
+    unimplemented!();
+  }
+
+  pub fn limit(&self, max_count: u64) -> bool {
+    let entries = self.entries.borrow();
+    assert!(!entries.is_empty());
+    entries.last().unwrap().count <= max_count
+  }
+
+  pub fn push(&self, epoch: u64) {
+    let mut entries = self.entries.borrow_mut();
+    if !entries.is_empty() && epoch == entries.last().unwrap().epoch {
+      entries.last_mut().unwrap().count += 1;
+    } else {
+      entries.push(OperatorStackEntry{
+        epoch:  epoch,
+        count:  1,
+      });
+    }
+  }
+
+  pub fn pop(&self, epoch: u64) {
+    let mut entries = self.entries.borrow_mut();
+    assert!(!entries.is_empty());
+    assert_eq!(epoch, entries.last().unwrap().epoch);
+    entries.last_mut().unwrap().count -= 1;
+    if 0 == entries.last().unwrap().count {
+      entries.pop();
+    }
+  }
+}
+
 pub trait Operator {
   fn _next(&self) -> u64;
   fn _epoch(&self) -> u64;
