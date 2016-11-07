@@ -65,7 +65,7 @@ impl<T, Update, Loss, S> StochasticOptimizer<T, Update, Loss, S> where T: Copy, 
 
   pub fn step(&mut self, samples: &mut Iterator<Item=S>) {
     self.cache.clear();
-    for mut sample in samples.take(self.minibatch_sz) {
+    for sample in samples.take(self.minibatch_sz) {
       self.cache.push(sample);
     }
     assert_eq!(self.minibatch_sz, self.cache.len());

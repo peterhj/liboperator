@@ -108,6 +108,12 @@ impl OperatorStack {
     unimplemented!();
   }
 
+  pub fn count(&self) -> u64 {
+    let entries = self.entries.borrow();
+    assert!(!entries.is_empty());
+    entries.last().unwrap().count
+  }
+
   pub fn limit(&self, max_count: u64) -> bool {
     let entries = self.entries.borrow();
     assert!(!entries.is_empty());
@@ -116,6 +122,9 @@ impl OperatorStack {
 
   pub fn push(&self, epoch: u64) {
     let mut entries = self.entries.borrow_mut();
+    if entries.len() == 10 {
+      println!("WARNING: operator stack depth is 10, probably a bug!");
+    }
     if !entries.is_empty() && epoch == entries.last().unwrap().epoch {
       entries.last_mut().unwrap().count += 1;
     } else {
