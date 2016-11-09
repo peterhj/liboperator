@@ -71,7 +71,9 @@ impl<Loss, S> StochasticUpdateStep<f32, Loss, S> for RmspropUpdateStep<f32, Loss
     self.tmp_buf.copy_from_slice(&self.grad);
     self.tmp_buf.reshape_mut(self.grad_sz).square();
     self.grad_var_acc.reshape_mut(self.grad_sz).average(1.0 - self.cfg.rms_decay, self.tmp_buf.reshape(self.grad_sz));
+    let rms_decay_scale = 1.0 / (1.0 - self.cfg.rms_decay.powi((iter_count + 1) as i32));
     self.tmp_buf.copy_from_slice(&self.grad_var_acc);
+    self.tmp_buf.reshape_mut(self.grad_sz).scale(rms_decay_scale);
     self.tmp_buf.reshape_mut(self.grad_sz).add_scalar(self.cfg.epsilon);
     self.tmp_buf.reshape_mut(self.grad_sz).sqrt();
     self.tmp_buf.reshape_mut(self.grad_sz).elem_ldiv(self.grad.reshape(self.grad_sz));

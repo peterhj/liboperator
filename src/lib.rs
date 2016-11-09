@@ -7,7 +7,7 @@ extern crate csv;
 extern crate densearray;
 extern crate rng;
 extern crate sharedmem;
-extern crate typemap;
+extern crate typemap_alt as typemap;
 
 extern crate rand;
 extern crate rustc_serialize;
@@ -239,6 +239,7 @@ pub trait NewDiffOperator<S>: Operator {
 
   fn _forward(&mut self, phase: OpPhase);
   fn _backward(&mut self);
+  fn _r_forward(&mut self) { unimplemented!(); }
 
   fn _dump_input(&mut self) -> Vec<u8> { unimplemented!(); }
   fn _dump_output(&mut self) -> Vec<u8> { unimplemented!(); }
@@ -380,6 +381,11 @@ pub trait DiffLoss<S>: NewDiffOperator<S> {
   fn backward(&mut self) {
     let epoch = self._next();
     self._traverse_bwd(epoch, &mut |op| op._backward());
+  }
+
+  fn r_forward(&mut self) {
+    let epoch = self._next();
+    self._traverse_bwd(epoch, &mut |op| op._r_forward());
   }
 }
 

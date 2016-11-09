@@ -11,7 +11,7 @@ path = "src/lib.rs"
 rand = "*"
 rustc-serialize = "*"
 csv = "*"
-densearray = { path = "../libdensearray" }
-sharedmem = { path = "../libsharedmem" }
-rng = { path = "../librng" }
-typemap = { path = "../rust-typemap" }
+densearray = "^0.1"
+sharedmem = "^0.1"
+rng = "^0.1"
+typemap-alt = { path = "../rust-typemap" }
