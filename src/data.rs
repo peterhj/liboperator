@@ -1,7 +1,7 @@
 use sharedmem::{SharedSlice};
 use typemap::{TypeMap, Key};
 
-use std::marker::{PhantomData, Reflect};
+use std::marker::{PhantomData};
 use std::rc::{Rc};
 use std::sync::{Arc};
 
@@ -67,6 +67,10 @@ impl SampleExtractInput<[f32]> for SharedSlice<f32> {
   }
 }
 
+pub trait SampleExtractTaggedInput<U: ?Sized> {
+  fn extract_tagged_input(&self, tag: usize, output: &mut U) -> Result<usize, ()>;
+}
+
 pub trait SampleInputShape<Shape> where Shape: PartialEq + Eq {
   fn input_shape(&self) -> Option<Shape>;
 }
@@ -89,28 +93,36 @@ impl SampleItem {
   }
 }
 
-pub struct SampleSharedSliceDataKey<T> where T: 'static + Copy + Reflect {
+pub struct SampleSharedSliceDataKey<T> where T: 'static + Copy {
   _marker:  PhantomData<T>,
 }
 
-impl<T> Key for SampleSharedSliceDataKey<T> where T: 'static + Copy + Reflect {
+impl<T> Key for SampleSharedSliceDataKey<T> where T: 'static + Copy {
   type Value = SharedSlice<T>;
 }
 
-pub struct SampleExtractInputKey<U: ?Sized> where U: 'static + Reflect {
+pub struct SampleExtractInputKey<U: ?Sized> where U: 'static {
   _marker:  PhantomData<U>,
 }
 
-impl<U: ?Sized> Key for SampleExtractInputKey<U> where U: 'static + Reflect {
+impl<U: ?Sized> Key for SampleExtractInputKey<U> where U: 'static {
   type Value = Rc<SampleExtractInput<U>>;
 }
 
-pub struct SampleSharedExtractInputKey<U: ?Sized> where U: 'static + Reflect {
+pub struct SampleSharedExtractInputKey<U: ?Sized> where U: 'static {
   _marker:  PhantomData<U>,
 }
 
-impl<U: ?Sized> Key for SampleSharedExtractInputKey<U> where U: 'static + Reflect {
+impl<U: ?Sized> Key for SampleSharedExtractInputKey<U> where U: 'static {
   type Value = Arc<SampleExtractInput<U>>;
+}
+
+pub struct SampleExtractTaggedInputKey<U: ?Sized> where U: 'static {
+  _marker:  PhantomData<U>,
+}
+
+impl<U: ?Sized> Key for SampleExtractTaggedInputKey<U> where U: 'static {
+  type Value = Rc<SampleExtractTaggedInput<U>>;
 }
 
 pub struct SampleInputShapeKey<Shape> where Shape: 'static + PartialEq + Eq {
@@ -133,6 +145,12 @@ pub struct SampleInputShape3dKey {}
 
 impl Key for SampleInputShape3dKey {
   type Value = (usize, usize, usize);
+}
+
+pub struct SampleInputTagsKey {}
+
+impl Key for SampleInputTagsKey {
+  type Value = usize;
 }
 
 pub struct SampleClassLabelKey {}

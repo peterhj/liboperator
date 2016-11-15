@@ -86,6 +86,14 @@ impl<Loss, S> StochasticUpdateStep<f32, Loss, S> for RmspropUpdateStep<f32, Loss
     }
   }
 
+  fn download_param(&mut self, loss: &mut Loss) {
+    loss.store_diff_param(&mut self.param);
+  }
+
+  fn upload_param(&mut self, loss: &mut Loss) {
+    loss.load_diff_param(&mut self.param);
+  }
+
   fn load_param(&mut self, src_param: &mut [f32]) {
     self.param.copy_from_slice(src_param);
   }

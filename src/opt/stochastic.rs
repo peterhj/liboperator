@@ -16,6 +16,8 @@ pub trait StochasticUpdateStep<T, Loss, S> where T: Copy, Loss: DiffLoss<S, IoBu
   fn initialize(cfg: Self::Cfg, loss: &mut Loss) -> Self where Self: Sized;
   fn pre_step(&mut self, loss: &mut Loss);
   fn step(&mut self, minibatch_sz: usize, iter_count: usize, loss: &mut Loss);
+  fn upload_param(&mut self, loss: &mut Loss) { unimplemented!(); }
+  fn download_param(&mut self, loss: &mut Loss) { unimplemented!(); }
   fn load_param(&mut self, src_param: &mut [T]);
   fn save_param(&mut self, dst_param: &mut [T]);
 }
