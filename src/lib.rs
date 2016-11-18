@@ -210,6 +210,14 @@ impl OperatorNode {
 /*pub trait OperatorOutput {
 }*/
 
+pub trait NewDiffOperator2<S>: NewDiffOperator<S> {
+  //type IoBuf: ?Sized;
+  type OpRef: ?Sized + 'static;
+
+  fn _traverse_fwd_new(&mut self, _epoch: u64, _apply: &mut FnMut(&mut Self::OpRef));
+  fn _traverse_bwd_new(&mut self, _epoch: u64, _apply: &mut FnMut(&mut Self::OpRef));
+}
+
 pub trait NewDiffOperator<S>: Operator {
   type IoBuf: ?Sized;
   //type OpRef = Rc<RefCell<NewDiffOperator<S, IoBuf=Self::IoBuf, OpRef=Self::OpRef>>>;

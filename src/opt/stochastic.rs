@@ -15,6 +15,7 @@ pub trait StochasticUpdateStep<T, Loss, S> where T: Copy, Loss: DiffLoss<S, IoBu
 
   fn initialize(cfg: Self::Cfg, loss: &mut Loss) -> Self where Self: Sized;
   fn pre_step(&mut self, loss: &mut Loss);
+  fn accumulate(&mut self, minibatch_sz: usize, loss: &mut Loss) { unimplemented!(); }
   fn step(&mut self, minibatch_sz: usize, iter_count: usize, loss: &mut Loss);
   fn upload_param(&mut self, loss: &mut Loss) { unimplemented!(); }
   fn download_param(&mut self, loss: &mut Loss) { unimplemented!(); }
@@ -86,6 +87,7 @@ impl<T, Update, Loss, S> StochasticOptimizer<T, Update, Loss, S> where T: Copy, 
       loss.forward(OpPhase::Learning);
       loss.backward();
     }
+    self.update_step.accumulate(self.minibatch_sz, &mut *loss);
     self.update_step.step(self.minibatch_sz, self.iter_count, &mut *loss);
 
     self.iter_count += 1;

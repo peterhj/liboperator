@@ -1,6 +1,6 @@
 pub use super::{
   DiffOperator, DiffOperatorInput, DiffOperatorOutput, DiffOperatorIo, OpCapability, OpPhase, Regularization,
-  OperatorStack, /*OperatorNode,*/ Operator, NewDiffOperator, DiffOperatorRma, DiffLoss, LossReport, ClassLossStats, RegressLossStats,
+  OperatorStack, /*OperatorNode,*/ Operator, NewDiffOperator, NewDiffOperator2, DiffOperatorRma, DiffLoss, LossReport, ClassLossStats, RegressLossStats,
 };
 pub type OperatorNode = OperatorStack;
 pub use data::{
