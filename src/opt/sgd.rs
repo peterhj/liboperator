@@ -14,21 +14,21 @@ pub struct SgdUpdateStep<T, Loss, S> where T: Copy {
   cfg:          SgdConfig,
   grad_sz:      usize,
   param:        Vec<T>,
-  param_mirror: Vec<T>,
+  param_saved:  Vec<T>,
   grad:         Vec<T>,
   diff_acc:     Vec<T>,
   _marker:      PhantomData<fn (Loss, S)>,
 }
 
-impl<Loss, S> StochasticUpdateStep<f32, Loss, S> for SgdUpdateStep<f32, Loss, S> where Loss: DiffLoss<S, IoBuf=[f32]> {
+impl<Loss, S> GradUpdateStep<f32, Loss, S> for SgdUpdateStep<f32, Loss, S> where Loss: DiffLoss<S, IoBuf=[f32]> {
   type Cfg = SgdConfig;
 
   fn initialize(cfg: SgdConfig, loss: &mut Loss) -> SgdUpdateStep<f32, Loss, S> {
     let grad_sz = loss.diff_param_sz();
     let mut param = Vec::with_capacity(grad_sz);
     param.resize(grad_sz, 0.0);
-    let mut param_mirror = Vec::with_capacity(grad_sz);
-    param_mirror.resize(grad_sz, 0.0);
+    let mut param_saved = Vec::with_capacity(grad_sz);
+    param_saved.resize(grad_sz, 0.0);
     let mut grad = Vec::with_capacity(grad_sz);
     grad.resize(grad_sz, 0.0);
     let mut diff_acc = Vec::with_capacity(grad_sz);
@@ -37,24 +37,32 @@ impl<Loss, S> StochasticUpdateStep<f32, Loss, S> for SgdUpdateStep<f32, Loss, S>
       cfg:          cfg,
       grad_sz:      grad_sz,
       param:        param,
-      param_mirror: param_mirror,
+      param_saved:  param_saved,
       grad:         grad,
       diff_acc:     diff_acc,
       _marker:      PhantomData,
     }
   }
 
-  fn pre_step(&mut self, loss: &mut Loss) {
+  fn begin_iteration(&mut self, loss: &mut Loss) {
     if let Some(GradientMomentum::Nesterov(mu)) = self.cfg.momentum {
-      self.param_mirror.copy_from_slice(&self.param);
-      self.param_mirror.reshape_mut(self.grad_sz).add(mu, self.diff_acc.reshape(self.grad_sz));
-      loss.load_diff_param(&mut self.param_mirror);
-    } else {
+      loss.store_diff_param(&mut self.param_saved);
+      self.param.copy_from_slice(&self.param_saved);
+      self.param.reshape_mut(self.grad_sz).add(mu, self.diff_acc.reshape(self.grad_sz));
       loss.load_diff_param(&mut self.param);
     }
   }
 
-  fn step(&mut self, minibatch_sz: usize, iter_count: usize, loss: &mut Loss) {
+  fn end_iteration(&mut self, minibatch_sz: usize, loss: &mut Loss) {
+    loss.load_diff_param(&mut self.param_saved);
+    loss.store_grad(&mut self.grad);
+    self.grad.reshape_mut(self.grad_sz).div_scalar(minibatch_sz as f32);
+  }
+
+  fn step(&mut self, iter_count: usize, loss: &mut Loss) {
+    /*loss.store_grad(&mut self.grad);
+    self.grad.reshape_mut(self.grad_sz).div_scalar(minibatch_sz as f32);*/
+
     let step_size = match self.cfg.step_size {
       StepSize::Constant(alpha) => {
         alpha
@@ -65,9 +73,7 @@ impl<Loss, S> StochasticUpdateStep<f32, Loss, S> for SgdUpdateStep<f32, Loss, S>
       }
       _ => unimplemented!(),
     };
-    loss.update_nondiff_param(iter_count);
-    loss.store_grad(&mut self.grad);
-    self.grad.reshape_mut(self.grad_sz).div_scalar(minibatch_sz as f32);
+    loss.store_diff_param(&mut self.param);
     if let Some(GradientMomentum::HeavyBall(mu)) = self.cfg.momentum {
       self.diff_acc.reshape_mut(self.grad_sz).scale(mu);
       self.diff_acc.reshape_mut(self.grad_sz).add(-step_size, self.grad.reshape(self.grad_sz));
@@ -79,6 +85,15 @@ impl<Loss, S> StochasticUpdateStep<f32, Loss, S> for SgdUpdateStep<f32, Loss, S>
     } else {
       self.param.reshape_mut(self.grad_sz).add(-step_size, self.grad.reshape(self.grad_sz));
     }
+    loss.load_diff_param(&mut self.param);
+  }
+
+  fn download_param(&mut self, loss: &mut Loss) {
+    loss.store_diff_param(&mut self.param);
+  }
+
+  fn upload_param(&mut self, loss: &mut Loss) {
+    loss.load_diff_param(&mut self.param);
   }
 
   fn load_param(&mut self, src_param: &mut [f32]) {

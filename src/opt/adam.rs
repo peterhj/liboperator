@@ -24,7 +24,7 @@ pub struct AdamUpdateStep<T, Loss, S> {
   _marker:      PhantomData<fn (Loss, S)>,
 }
 
-impl<Loss, S> StochasticUpdateStep<f32, Loss, S> for AdamUpdateStep<f32, Loss, S> where Loss: DiffLoss<S, IoBuf=[f32]> {
+impl<Loss, S> GradUpdateStep<f32, Loss, S> for AdamUpdateStep<f32, Loss, S> where Loss: DiffLoss<S, IoBuf=[f32]> {
   type Cfg = AdamConfig;
 
   fn initialize(cfg: AdamConfig, loss: &mut Loss) -> AdamUpdateStep<f32, Loss, S> {
@@ -51,11 +51,15 @@ impl<Loss, S> StochasticUpdateStep<f32, Loss, S> for AdamUpdateStep<f32, Loss, S
     }
   }
 
-  fn pre_step(&mut self, loss: &mut Loss) {
-    loss.load_diff_param(&mut self.param);
+  fn begin_iteration(&mut self, loss: &mut Loss) {
   }
 
-  fn step(&mut self, minibatch_sz: usize, iter_count: usize, loss: &mut Loss) {
+  fn end_iteration(&mut self, minibatch_sz: usize, loss: &mut Loss) {
+    loss.store_grad(&mut self.grad);
+    self.grad.reshape_mut(self.grad_sz).div_scalar(minibatch_sz as f32);
+  }
+
+  fn step(&mut self, iter_count: usize, loss: &mut Loss) {
     let step_size = match self.cfg.step_size {
       StepSize::Constant(alpha) => {
         alpha
@@ -66,11 +70,8 @@ impl<Loss, S> StochasticUpdateStep<f32, Loss, S> for AdamUpdateStep<f32, Loss, S
       }
       _ => unimplemented!(),
     };
-    loss.update_nondiff_param(iter_count);
-    loss.store_grad(&mut self.grad);
     let gamma1_scale = 1.0 / (1.0 - (1.0 - self.cfg.gamma1).powi((iter_count + 1) as i32));
     let gamma2_scale = 1.0 / (1.0 - (1.0 - self.cfg.gamma2).powi((iter_count + 1) as i32));
-    self.grad.reshape_mut(self.grad_sz).div_scalar(minibatch_sz as f32);
     self.grad_acc.reshape_mut(self.grad_sz).average(self.cfg.gamma1, self.grad.reshape(self.grad_sz));
     self.tmp_buf.copy_from_slice(&self.grad);
     self.tmp_buf.reshape_mut(self.grad_sz).square();
@@ -81,7 +82,9 @@ impl<Loss, S> StochasticUpdateStep<f32, Loss, S> for AdamUpdateStep<f32, Loss, S
     self.tmp_buf.reshape_mut(self.grad_sz).sqrt();
     self.tmp_buf.reshape_mut(self.grad_sz).elem_ldiv(self.grad_acc.reshape(self.grad_sz));
     self.tmp_buf.reshape_mut(self.grad_sz).scale(-step_size * gamma1_scale);
+    loss.store_diff_param(&mut self.param);
     self.param.reshape_mut(self.grad_sz).add(1.0, self.tmp_buf.reshape(self.grad_sz));
+    loss.load_diff_param(&mut self.param);
   }
 
   fn load_param(&mut self, src_param: &mut [f32]) {

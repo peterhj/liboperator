@@ -23,7 +23,7 @@ pub struct RmspropUpdateStep<T, Loss, S> where T: Copy {
   _marker:      PhantomData<fn (Loss, S)>,
 }
 
-impl<Loss, S> StochasticUpdateStep<f32, Loss, S> for RmspropUpdateStep<f32, Loss, S> where Loss: DiffLoss<S, IoBuf=[f32]> {
+impl<Loss, S> GradUpdateStep<f32, Loss, S> for RmspropUpdateStep<f32, Loss, S> where Loss: DiffLoss<S, IoBuf=[f32]> {
   type Cfg = RmspropConfig;
 
   fn initialize(cfg: RmspropConfig, loss: &mut Loss) -> RmspropUpdateStep<f32, Loss, S> {
@@ -50,19 +50,15 @@ impl<Loss, S> StochasticUpdateStep<f32, Loss, S> for RmspropUpdateStep<f32, Loss
     }
   }
 
-  fn pre_step(&mut self, loss: &mut Loss) {
+  fn begin_iteration(&mut self, loss: &mut Loss) {
   }
 
-  fn accumulate(&mut self, minibatch_sz: usize, loss: &mut Loss) {
-    loss.store_diff_param(&mut self.param);
+  fn end_iteration(&mut self, minibatch_sz: usize, loss: &mut Loss) {
     loss.store_grad(&mut self.grad);
     self.grad.reshape_mut(self.grad_sz).div_scalar(minibatch_sz as f32);
   }
 
-  fn step(&mut self, minibatch_sz: usize, iter_count: usize, loss: &mut Loss) {
-    loss.store_diff_param(&mut self.param);
-    loss.store_grad(&mut self.grad);
-    self.grad.reshape_mut(self.grad_sz).div_scalar(minibatch_sz as f32);
+  fn step(&mut self, iter_count: usize, loss: &mut Loss) {
     self.tmp_buf.copy_from_slice(&self.grad);
     self.tmp_buf.reshape_mut(self.grad_sz).square();
     self.grad_var_acc.reshape_mut(self.grad_sz).average(1.0 - self.cfg.rms_decay, self.tmp_buf.reshape(self.grad_sz));
@@ -82,6 +78,7 @@ impl<Loss, S> StochasticUpdateStep<f32, Loss, S> for RmspropUpdateStep<f32, Loss
       }
       _ => unimplemented!(),
     };
+    loss.store_diff_param(&mut self.param);
     if let Some(mu) = self.cfg.momentum {
       self.diff_acc.reshape_mut(self.grad_sz).scale(mu);
       self.diff_acc.reshape_mut(self.grad_sz).add(-step_size, self.tmp_buf.reshape(self.grad_sz));
@@ -90,7 +87,6 @@ impl<Loss, S> StochasticUpdateStep<f32, Loss, S> for RmspropUpdateStep<f32, Loss
       self.param.reshape_mut(self.grad_sz).add(-step_size, self.tmp_buf.reshape(self.grad_sz));
     }
     loss.load_diff_param(&mut self.param);
-    loss.update_nondiff_param(iter_count);
   }
 
   fn download_param(&mut self, loss: &mut Loss) {
