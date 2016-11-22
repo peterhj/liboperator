@@ -253,6 +253,15 @@ pub enum GradientMomentum {
   Nesterov(f32),
 }
 
+impl GradientMomentum {
+  pub fn mu(&self) -> f32 {
+    match *self {
+      GradientMomentum::HeavyBall(mu) => mu,
+      GradientMomentum::Nesterov(mu) => mu,
+    }
+  }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub enum NesterovParamState {
   Orig,
