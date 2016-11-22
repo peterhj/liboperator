@@ -74,11 +74,7 @@ impl<Loss, S> GradUpdateStep<f32, Loss, S> for SgdUpdateStep<f32, Loss, S> where
       _ => unimplemented!(),
     };
     loss.store_diff_param(&mut self.param);
-    if let Some(GradientMomentum::HeavyBall(mu)) = self.cfg.momentum {
-      self.diff_acc.reshape_mut(self.grad_sz).scale(mu);
-      self.diff_acc.reshape_mut(self.grad_sz).add(-step_size, self.grad.reshape(self.grad_sz));
-      self.param.reshape_mut(self.grad_sz).add(1.0, self.diff_acc.reshape(self.grad_sz));
-    } else if let Some(GradientMomentum::Nesterov(mu)) = self.cfg.momentum {
+    if self.cfg.momentum.is_some() {
       self.diff_acc.reshape_mut(self.grad_sz).scale(mu);
       self.diff_acc.reshape_mut(self.grad_sz).add(-step_size, self.grad.reshape(self.grad_sz));
       self.param.reshape_mut(self.grad_sz).add(1.0, self.diff_acc.reshape(self.grad_sz));
