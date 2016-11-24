@@ -12,7 +12,7 @@ pub struct AdamConfig {
   pub epsilon:      f32,
 }
 
-pub struct AdamUpdate<T, Loss, S, IoBuf: ?Sized> where T: Copy {
+pub struct AdamUpdate<T> where T: Copy {
   cfg:          AdamConfig,
   grad_sz:      usize,
   param:        Vec<T>,
@@ -21,13 +21,13 @@ pub struct AdamUpdate<T, Loss, S, IoBuf: ?Sized> where T: Copy {
   grad_var_acc: Vec<T>,
   //diff_acc:     Vec<T>,
   tmp_buf:      Vec<T>,
-  _marker:      PhantomData<fn (Loss, S, IoBuf)>,
+  //_marker:      PhantomData<fn (Loss, S, IoBuf)>,
 }
 
-impl<Loss, S> GradUpdate<f32, Loss, S, [f32]> for AdamUpdate<f32, Loss, S, [f32]> where Loss: DiffLoss<S, [f32]> {
+impl<Loss, S> GradUpdate<f32, Loss, S, [f32]> for AdamUpdate<f32> where Loss: DiffLoss<S, [f32]> {
   type Cfg = AdamConfig;
 
-  fn initialize(cfg: AdamConfig, loss: &mut Loss) -> AdamUpdate<f32, Loss, S, [f32]> {
+  fn initialize(cfg: AdamConfig, loss: &mut Loss) -> AdamUpdate<f32> {
     let grad_sz = loss.diff_param_sz();
     let mut param = Vec::with_capacity(grad_sz);
     param.resize(grad_sz, 0.0);
@@ -47,7 +47,7 @@ impl<Loss, S> GradUpdate<f32, Loss, S, [f32]> for AdamUpdate<f32, Loss, S, [f32]
       grad_acc:     grad_acc,
       grad_var_acc: grad_var_acc,
       tmp_buf:      tmp_buf,
-      _marker:      PhantomData,
+      //_marker:      PhantomData,
     }
   }
 

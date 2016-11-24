@@ -10,7 +10,7 @@ pub struct AdagradConfig {
   pub epsilon:      f32,
 }
 
-pub struct AdagradUpdate<T, Loss, S, IoBuf: ?Sized> where T: Copy {
+pub struct AdagradUpdate<T> where T: Copy {
   //minibatch_sz: usize,
   cfg:          AdagradConfig,
   grad_sz:      usize,
@@ -18,13 +18,13 @@ pub struct AdagradUpdate<T, Loss, S, IoBuf: ?Sized> where T: Copy {
   grad:         Vec<T>,
   grad_var_acc: Vec<T>,
   tmp_buf:      Vec<T>,
-  _marker:      PhantomData<fn (Loss, S, IoBuf)>,
+  //_marker:      PhantomData<fn (Loss, S, IoBuf)>,
 }
 
-impl<Loss, S> GradUpdate<f32, Loss, S, [f32]> for AdagradUpdate<f32, Loss, S, [f32]> where Loss: DiffLoss<S, [f32]> {
+impl<Loss, S> GradUpdate<f32, Loss, S, [f32]> for AdagradUpdate<f32> where Loss: DiffLoss<S, [f32]> {
   type Cfg = AdagradConfig;
 
-  fn initialize(cfg: AdagradConfig, loss: &mut Loss) -> AdagradUpdate<f32, Loss, S, [f32]> {
+  fn initialize(cfg: AdagradConfig, loss: &mut Loss) -> AdagradUpdate<f32> {
     let grad_sz = loss.diff_param_sz();
     let mut param = Vec::with_capacity(grad_sz);
     param.resize(grad_sz, 0.0);
@@ -42,7 +42,7 @@ impl<Loss, S> GradUpdate<f32, Loss, S, [f32]> for AdagradUpdate<f32, Loss, S, [f
       grad:         grad,
       grad_var_acc: grad_var_acc,
       tmp_buf:      tmp_buf,
-      _marker:      PhantomData,
+      //_marker:      PhantomData,
     }
   }
 

@@ -161,14 +161,14 @@ pub struct Epoch {
 }
 
 #[derive(Clone, Default)]
-pub struct OperatorNode {
+pub struct OperatorCell {
   pub curr_epoch:   Cell<u64>,
   //pub node_id:      Cell<Option<NodeId>>,
   //pub curr_epoch:   Cell<Epoch>,
   pub curr_count:   Cell<u64>,
 }
 
-impl Operator for OperatorNode {
+impl Operator for OperatorCell {
   fn _next(&self) -> u64 {
     if 0 == self.curr_epoch.get() {
       OP_NODE_ID_COUNTER.with(|op_node_id_ctr| {
@@ -189,7 +189,7 @@ impl Operator for OperatorNode {
   }
 }
 
-impl OperatorNode {
+impl OperatorCell {
   pub fn step(&self, next_epoch: u64) {
     assert!(next_epoch >= self.curr_epoch.get());
     if next_epoch != self.curr_epoch.get() {
