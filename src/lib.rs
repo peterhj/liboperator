@@ -241,7 +241,7 @@ pub trait NewDiffOpCast<S> {
   fn diff_op(&mut self) -> &mut NewDiffOperator2<S, OpRef=Self::OpTarget>;
 }*/
 
-pub trait DiffOperatorRma<S, RmaBuf>: NewDiffOperator<S> {
+/*pub trait DiffOperatorRma<S, RmaBuf>: NewDiffOperator<S> {
   type RmaCtx;
 
   fn _rma_load_diff_param(&mut self, offset: usize, param_reader: &mut RmaBuf, ctx: Self::RmaCtx) -> usize { 0 }
@@ -249,39 +249,42 @@ pub trait DiffOperatorRma<S, RmaBuf>: NewDiffOperator<S> {
   fn _rma_store_diff_param(&mut self, offset: usize, param_writer: &mut RmaBuf, ctx: Self::RmaCtx) -> usize { 0 }
   fn _rma_store_nondiff_param(&mut self, offset: usize, param_writer: &mut RmaBuf) -> usize { 0 }
   fn _rma_store_grad(&mut self, offset: usize, grad_writer: &mut RmaBuf, ctx: Self::RmaCtx) -> usize { 0 }
+}*/
+
+pub trait DiffOperatorIo<IoBuf: ?Sized> {
+  fn _load_diff_param(&mut self, offset: usize, param_reader: &mut IoBuf) -> usize { 0 }
+  fn _load_nondiff_param(&mut self, offset: usize, param_reader: &mut IoBuf) -> usize { 0 }
+  fn _store_diff_param(&mut self, offset: usize, param_writer: &mut IoBuf) -> usize { 0 }
+  fn _store_nondiff_param(&mut self, offset: usize, param_writer: &mut IoBuf) -> usize { 0 }
+  fn _store_grad(&mut self, offset: usize, grad_writer: &mut IoBuf) -> usize { 0 }
+  fn _load_direction(&mut self, offset: usize, direction_reader: &mut IoBuf) -> usize { 0 }
 }
 
-pub trait DiffOperatorIo<IoBuf> {
-  fn _new_load_diff_param(&mut self, offset: usize, param_reader: &mut IoBuf) -> usize { 0 }
-  fn _new_load_nondiff_param(&mut self, offset: usize, param_reader: &mut IoBuf) -> usize { 0 }
-  fn _new_store_diff_param(&mut self, offset: usize, param_writer: &mut IoBuf) -> usize { 0 }
-  fn _new_store_nondiff_param(&mut self, offset: usize, param_writer: &mut IoBuf) -> usize { 0 }
-  fn _new_store_grad(&mut self, offset: usize, grad_writer: &mut IoBuf) -> usize { 0 }
-  //fn _load_direction(&mut self, offset: usize, direction_reader: &mut IoBuf) -> usize { 0 }
-}
-
-pub trait DiffOperator<S, IoBuf>: Operator + DiffOperatorIo<IoBuf> {
+/*pub trait DiffOperator<S, IoBuf: ?Sized>: Operator + DiffOperatorIo<IoBuf: ?Sized> {
   fn _new_traverse_fwd(&mut self, _epoch: u64, _apply: &mut FnMut(&mut DiffOperator<S, IoBuf>));
   fn _new_traverse_bwd(&mut self, _epoch: u64, _apply: &mut FnMut(&mut DiffOperator<S, IoBuf>));
-}
+}*/
 
-pub trait NewDiffOperator<S>: Operator {
-  type IoBuf: ?Sized;
+//pub trait NewDiffOperator<S>: Operator {
+pub trait DiffOperator<S, IoBuf: ?Sized>: Operator + DiffOperatorIo<IoBuf> {
+  //type IoBuf: ?Sized;
   //type OpRef = Rc<RefCell<NewDiffOperator<S, IoBuf=Self::IoBuf, OpRef=Self::OpRef>>>;
 
-  fn _traverse_fwd(&mut self, _epoch: u64, _apply: &mut FnMut(&mut NewDiffOperator<S, IoBuf=Self::IoBuf>));
-  fn _traverse_bwd(&mut self, _epoch: u64, _apply: &mut FnMut(&mut NewDiffOperator<S, IoBuf=Self::IoBuf>));
   //fn _traverse_fwd_new(&self, _epoch: u64, _apply: &mut FnMut(Self::OpRef));
   //fn _traverse_bwd_new(&self, _epoch: u64, _apply: &mut FnMut(Self::OpRef));
+  //fn _traverse_fwd(&mut self, _epoch: u64, _apply: &mut FnMut(&mut NewDiffOperator<S, IoBuf=Self::IoBuf>));
+  //fn _traverse_bwd(&mut self, _epoch: u64, _apply: &mut FnMut(&mut NewDiffOperator<S, IoBuf=Self::IoBuf>));
+  fn _traverse_fwd(&mut self, _epoch: u64, _apply: &mut FnMut(&mut DiffOperator<S, IoBuf>));
+  fn _traverse_bwd(&mut self, _epoch: u64, _apply: &mut FnMut(&mut DiffOperator<S, IoBuf>));
 
   fn _diff_param_sz(&self) -> usize { 0 }
   fn _nondiff_param_sz(&self) -> usize { 0 }
 
-  fn _load_diff_param(&mut self, offset: usize, param_reader: &mut Self::IoBuf) -> usize { 0 }
+  /*fn _load_diff_param(&mut self, offset: usize, param_reader: &mut Self::IoBuf) -> usize { 0 }
   fn _load_nondiff_param(&mut self, offset: usize, param_reader: &mut Self::IoBuf) -> usize { 0 }
   fn _store_diff_param(&mut self, offset: usize, param_writer: &mut Self::IoBuf) -> usize { 0 }
   fn _store_nondiff_param(&mut self, offset: usize, param_writer: &mut Self::IoBuf) -> usize { 0 }
-  fn _store_grad(&mut self, offset: usize, grad_writer: &mut Self::IoBuf) -> usize { 0 }
+  fn _store_grad(&mut self, offset: usize, grad_writer: &mut Self::IoBuf) -> usize { 0 }*/
 
   fn _save_rng_state(&mut self) {}
   fn _restore_rng_state(&mut self) {}
@@ -354,7 +357,7 @@ pub trait NewDiffOperator<S>: Operator {
   }
 }*/
 
-pub trait NewDiffLoss<S, IoBuf>: DiffOperator<S, IoBuf> {
+/*pub trait NewDiffLoss<S, IoBuf: ?Sized>: DiffOperator<S, IoBuf> {
   fn new_load_diff_param(&mut self, param_reader: &mut IoBuf) -> usize {
     let epoch = self._next();
     let mut offset = 0;
@@ -363,9 +366,9 @@ pub trait NewDiffLoss<S, IoBuf>: DiffOperator<S, IoBuf> {
     });
     offset
   }
-}
+}*/
 
-pub trait DiffLoss<S>: NewDiffOperator<S> {
+pub trait DiffLoss<S, IoBuf: ?Sized>: DiffOperator<S, IoBuf> {
   fn reset_loss(&mut self);
   fn store_loss(&mut self) -> f32;
   fn _store_accuracy(&mut self) -> usize { 0 }
@@ -391,7 +394,7 @@ pub trait DiffLoss<S>: NewDiffOperator<S> {
     nondiff_sz
   }
 
-  fn load_diff_param(&mut self, param_reader: &mut Self::IoBuf) -> usize {
+  fn load_diff_param(&mut self, param_reader: &mut IoBuf) -> usize {
     //param_reader.reset();
     let epoch = self._next();
     let mut offset = 0;
@@ -401,7 +404,7 @@ pub trait DiffLoss<S>: NewDiffOperator<S> {
     offset
   }
 
-  fn load_nondiff_param(&mut self, param_reader: &mut Self::IoBuf) -> usize {
+  fn load_nondiff_param(&mut self, param_reader: &mut IoBuf) -> usize {
     //param_reader.reset();
     let epoch = self._next();
     let mut offset = 0;
@@ -411,7 +414,7 @@ pub trait DiffLoss<S>: NewDiffOperator<S> {
     offset
   }
 
-  fn store_diff_param(&mut self, param_writer: &mut Self::IoBuf) -> usize {
+  fn store_diff_param(&mut self, param_writer: &mut IoBuf) -> usize {
     //param_writer.reset();
     let epoch = self._next();
     let mut offset = 0;
@@ -421,7 +424,7 @@ pub trait DiffLoss<S>: NewDiffOperator<S> {
     offset
   }
 
-  fn store_nondiff_param(&mut self, param_writer: &mut Self::IoBuf) -> usize {
+  fn store_nondiff_param(&mut self, param_writer: &mut IoBuf) -> usize {
     //param_writer.reset();
     let epoch = self._next();
     let mut offset = 0;
@@ -431,7 +434,7 @@ pub trait DiffLoss<S>: NewDiffOperator<S> {
     offset
   }
 
-  fn store_grad(&mut self, grad_writer: &mut Self::IoBuf) -> usize {
+  fn store_grad(&mut self, grad_writer: &mut IoBuf) -> usize {
     //grad_writer.reset();
     let epoch = self._next();
     let mut offset = 0;

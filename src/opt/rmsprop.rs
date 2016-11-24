@@ -12,7 +12,7 @@ pub struct RmspropConfig {
   pub epsilon:      f32,
 }
 
-pub struct RmspropUpdateStep<T, Loss, S> where T: Copy {
+pub struct RmspropUpdate<T, Loss, S, IoBuf: ?Sized> where T: Copy {
   cfg:          RmspropConfig,
   grad_sz:      usize,
   param:        Vec<T>,
@@ -20,13 +20,13 @@ pub struct RmspropUpdateStep<T, Loss, S> where T: Copy {
   grad_var_acc: Vec<T>,
   diff_acc:     Vec<T>,
   tmp_buf:      Vec<T>,
-  _marker:      PhantomData<fn (Loss, S)>,
+  _marker:      PhantomData<fn (Loss, S, IoBuf)>,
 }
 
-impl<Loss, S> GradUpdateStep<f32, Loss, S> for RmspropUpdateStep<f32, Loss, S> where Loss: DiffLoss<S, IoBuf=[f32]> {
+impl<Loss, S> GradUpdate<f32, Loss, S, [f32]> for RmspropUpdate<f32, Loss, S, [f32]> where Loss: DiffLoss<S, [f32]> {
   type Cfg = RmspropConfig;
 
-  fn initialize(cfg: RmspropConfig, loss: &mut Loss) -> RmspropUpdateStep<f32, Loss, S> {
+  fn initialize(cfg: RmspropConfig, loss: &mut Loss) -> RmspropUpdate<f32, Loss, S, [f32]> {
     let grad_sz = loss.diff_param_sz();
     let mut param = Vec::with_capacity(grad_sz);
     param.resize(grad_sz, 0.0);
@@ -38,7 +38,7 @@ impl<Loss, S> GradUpdateStep<f32, Loss, S> for RmspropUpdateStep<f32, Loss, S> w
     diff_acc.resize(grad_sz, 0.0);
     let mut tmp_buf = Vec::with_capacity(grad_sz);
     tmp_buf.resize(grad_sz, 0.0);
-    RmspropUpdateStep{
+    RmspropUpdate{
       cfg:          cfg,
       grad_sz:      grad_sz,
       param:        param,

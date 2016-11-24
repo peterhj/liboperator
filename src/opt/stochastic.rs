@@ -10,7 +10,7 @@ use std::marker::{PhantomData};
 use std::num::{Zero};
 use std::rc::{Rc};
 
-pub trait GradUpdateStep<T, Loss, S> where T: Copy, Loss: DiffLoss<S> {
+pub trait GradUpdate<T, Loss, S, IoBuf: ?Sized> where T: Copy, Loss: DiffLoss<S, IoBuf> {
   type Cfg: Clone;
 
   fn initialize(cfg: Self::Cfg, loss: &mut Loss) -> Self where Self: Sized;
@@ -27,7 +27,7 @@ pub trait GradUpdateStep<T, Loss, S> where T: Copy, Loss: DiffLoss<S> {
   fn save_param(&mut self, dst_param: &mut [T]) { unimplemented!(); }
 }
 
-pub struct StochasticGradWorker<T, Update, Loss, S> where T: Copy, Update: GradUpdateStep<T, Loss, S>, Loss: DiffLoss<S> {
+pub struct StochasticGradWorker<T, Update, Loss, S, IoBuf: ?Sized> where T: Copy, Update: GradUpdate<T, Loss, S, IoBuf>, Loss: DiffLoss<S, IoBuf> {
   batch_sz:     usize,
   minibatch_sz: usize,
   grad_sz:      usize,
@@ -40,8 +40,8 @@ pub struct StochasticGradWorker<T, Update, Loss, S> where T: Copy, Update: GradU
   //dirty_param:  bool,
 }
 
-impl<T, Update, Loss, S> StochasticGradWorker<T, Update, Loss, S> where T: Copy + Zero, Update: GradUpdateStep<T, Loss, S>, Loss: DiffLoss<S, IoBuf=[T]> {
-  pub fn new(batch_sz: usize, minibatch_sz: usize, cfg: Update::Cfg, loss: Rc<RefCell<Loss>>) -> StochasticGradWorker<T, Update, Loss, S> {
+impl<T, Update, Loss, S, IoBuf: ?Sized> StochasticGradWorker<T, Update, Loss, S, IoBuf> where T: Copy + Zero, Update: GradUpdate<T, Loss, S, IoBuf>, Loss: DiffLoss<S, IoBuf> {
+  pub fn new(batch_sz: usize, minibatch_sz: usize, cfg: Update::Cfg, loss: Rc<RefCell<Loss>>) -> StochasticGradWorker<T, Update, Loss, S, IoBuf> {
     let grad_sz = loss.borrow_mut().diff_param_sz();
     let cache = Vec::with_capacity(minibatch_sz);
     //let mut param_saved = Vec::with_capacity(grad_sz);
@@ -54,14 +54,14 @@ impl<T, Update, Loss, S> StochasticGradWorker<T, Update, Loss, S> where T: Copy 
       iter_count:   0,
       loss:         loss.clone(),
       cache:        cache,
-      update_step:  GradUpdateStep::initialize(cfg, &mut *loss.borrow_mut()),
+      update_step:  GradUpdate::initialize(cfg, &mut *loss.borrow_mut()),
       //param_saved:  param_saved,
       //dirty_param:  true,
     }
   }
 }
 
-impl<T, Update, Loss, S> StochasticGradWorker<T, Update, Loss, S> where T: Copy, Update: GradUpdateStep<T, Loss, S>, Loss: DiffLoss<S, IoBuf=[T]> {
+impl<T, Update, Loss, S, IoBuf: ?Sized> StochasticGradWorker<T, Update, Loss, S, IoBuf> where T: Copy, Update: GradUpdate<T, Loss, S, IoBuf>, Loss: DiffLoss<S, IoBuf> {
   pub fn init(&mut self, rng: &mut Xorshiftplus128Rng) {
     let mut loss = self.loss.borrow_mut();
     loss.init_param(rng);
@@ -126,7 +126,7 @@ impl<T, Update, Loss, S> StochasticGradWorker<T, Update, Loss, S> where T: Copy,
   }
 }
 
-impl<Update, Loss, S> StochasticGradWorker<f32, Update, Loss, S> where Update: GradUpdateStep<f32, Loss, S>, Loss: DiffLoss<S, IoBuf=[f32]> + LossReport<ClassLossStats> {
+impl<Update, Loss, S, IoBuf: ?Sized> StochasticGradWorker<f32, Update, Loss, S, IoBuf> where Update: GradUpdate<f32, Loss, S, IoBuf>, Loss: DiffLoss<S, IoBuf> + LossReport<ClassLossStats> {
   pub fn update_stats(&self, stats: &mut ClassLossStats) {
     let mut operator = self.loss.borrow_mut();
     operator.update_stats(self.iter_count, stats);
