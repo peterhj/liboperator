@@ -13,7 +13,7 @@ extern crate rand;
 extern crate rustc_serialize;
 
 //use io::{IoBuffer};
-use rw::{ReadBuffer, ReadAccumulateBuffer, WriteBuffer, AccumulateBuffer};
+//use rw::{ReadBuffer, ReadAccumulateBuffer, WriteBuffer, AccumulateBuffer};
 
 use rng::xorshift::{Xorshiftplus128Rng};
 
@@ -77,6 +77,11 @@ pub enum OpPhase {
 #[derive(Clone, Copy, Debug)]
 pub enum Regularization {
   L2(f32),
+}
+
+pub trait Operator {
+  fn _next(&self) -> u64;
+  fn _epoch(&self) -> u64 { unimplemented!(); }
 }
 
 pub struct OperatorStackEntry {
@@ -146,11 +151,6 @@ impl OperatorStack {
   }
 }
 
-pub trait Operator {
-  fn _next(&self) -> u64;
-  fn _epoch(&self) -> u64;
-}
-
 #[derive(Clone, Copy, Default)]
 pub struct NodeId(pub u32);
 
@@ -184,7 +184,8 @@ impl Operator for OperatorNode {
   }
 
   fn _epoch(&self) -> u64 {
-    self.curr_epoch.get()
+    //self.curr_epoch.get()
+    unimplemented!();
   }
 }
 
@@ -240,6 +241,30 @@ pub trait NewDiffOpCast<S> {
   fn diff_op(&mut self) -> &mut NewDiffOperator2<S, OpRef=Self::OpTarget>;
 }*/
 
+pub trait DiffOperatorRma<S, RmaBuf>: NewDiffOperator<S> {
+  type RmaCtx;
+
+  fn _rma_load_diff_param(&mut self, offset: usize, param_reader: &mut RmaBuf, ctx: Self::RmaCtx) -> usize { 0 }
+  fn _rma_load_nondiff_param(&mut self, offset: usize, param_reader: &mut RmaBuf) -> usize { 0 }
+  fn _rma_store_diff_param(&mut self, offset: usize, param_writer: &mut RmaBuf, ctx: Self::RmaCtx) -> usize { 0 }
+  fn _rma_store_nondiff_param(&mut self, offset: usize, param_writer: &mut RmaBuf) -> usize { 0 }
+  fn _rma_store_grad(&mut self, offset: usize, grad_writer: &mut RmaBuf, ctx: Self::RmaCtx) -> usize { 0 }
+}
+
+pub trait DiffOperatorIo<IoBuf> {
+  fn _new_load_diff_param(&mut self, offset: usize, param_reader: &mut IoBuf) -> usize { 0 }
+  fn _new_load_nondiff_param(&mut self, offset: usize, param_reader: &mut IoBuf) -> usize { 0 }
+  fn _new_store_diff_param(&mut self, offset: usize, param_writer: &mut IoBuf) -> usize { 0 }
+  fn _new_store_nondiff_param(&mut self, offset: usize, param_writer: &mut IoBuf) -> usize { 0 }
+  fn _new_store_grad(&mut self, offset: usize, grad_writer: &mut IoBuf) -> usize { 0 }
+  //fn _load_direction(&mut self, offset: usize, direction_reader: &mut IoBuf) -> usize { 0 }
+}
+
+pub trait DiffOperator<S, IoBuf>: Operator + DiffOperatorIo<IoBuf> {
+  fn _new_traverse_fwd(&mut self, _epoch: u64, _apply: &mut FnMut(&mut DiffOperator<S, IoBuf>));
+  fn _new_traverse_bwd(&mut self, _epoch: u64, _apply: &mut FnMut(&mut DiffOperator<S, IoBuf>));
+}
+
 pub trait NewDiffOperator<S>: Operator {
   type IoBuf: ?Sized;
   //type OpRef = Rc<RefCell<NewDiffOperator<S, IoBuf=Self::IoBuf, OpRef=Self::OpRef>>>;
@@ -277,17 +302,7 @@ pub trait NewDiffOperator<S>: Operator {
   fn _dump_output(&mut self) -> Vec<u8> { unimplemented!(); }
 }
 
-pub trait DiffOperatorRma<S, RmaBuf>: NewDiffOperator<S> {
-  type RmaCtx;
-
-  fn _rma_load_diff_param(&mut self, offset: usize, param_reader: &mut RmaBuf, ctx: Self::RmaCtx) -> usize { 0 }
-  fn _rma_load_nondiff_param(&mut self, offset: usize, param_reader: &mut RmaBuf) -> usize { 0 }
-  fn _rma_store_diff_param(&mut self, offset: usize, param_writer: &mut RmaBuf, ctx: Self::RmaCtx) -> usize { 0 }
-  fn _rma_store_nondiff_param(&mut self, offset: usize, param_writer: &mut RmaBuf) -> usize { 0 }
-  fn _rma_store_grad(&mut self, offset: usize, grad_writer: &mut RmaBuf, ctx: Self::RmaCtx) -> usize { 0 }
-}
-
-pub trait DiffLossRma<S, RmaBuf>: DiffLoss<S> + DiffOperatorRma<S, RmaBuf> {
+/*pub trait DiffLossRma<S, RmaBuf>: DiffLoss<S> + DiffOperatorRma<S, RmaBuf> {
   fn rma_load_diff_param(&mut self, param_reader: &mut RmaBuf, ctx: Self::RmaCtx) -> usize {
     unimplemented!();
     /*let epoch = self._next();
@@ -336,6 +351,17 @@ pub trait DiffLossRma<S, RmaBuf>: DiffLoss<S> + DiffOperatorRma<S, RmaBuf> {
       offset += op._rma_store_grad(offset, grad_writer);
     });
     offset*/
+  }
+}*/
+
+pub trait NewDiffLoss<S, IoBuf>: DiffOperator<S, IoBuf> {
+  fn new_load_diff_param(&mut self, param_reader: &mut IoBuf) -> usize {
+    let epoch = self._next();
+    let mut offset = 0;
+    self._new_traverse_bwd(epoch, &mut |op| {
+      offset += op._new_load_diff_param(offset, param_reader);
+    });
+    offset
   }
 }
 
@@ -539,7 +565,7 @@ impl RegressLossStats {
   }
 }
 
-pub trait DiffOperator<T> {
+/*pub trait DiffOperator<T> {
   type Output;
   type Rng: Rng;
 
@@ -605,12 +631,12 @@ pub trait DiffOperatorInput<T, S>: DiffOperator<T> {
 
 pub trait DiffOperatorOutput<T, U>: DiffOperator<T> {
   fn get_output(&mut self) -> U;
-}
+}*/
 
 pub trait CheckpointFormat {
 }
 
-pub trait DiffOperatorCheckpoint<Format> where Format: CheckpointFormat {
+/*pub trait DiffOperatorCheckpoint<Format> where Format: CheckpointFormat {
   fn decode(reader: &mut Read) -> Result<Self, ()> where Self: Sized;
   fn encode(&mut self, writer: &mut Write) -> Result<(), ()>;
-}
+}*/

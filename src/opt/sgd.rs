@@ -54,15 +54,14 @@ impl<Loss, S> GradUpdateStep<f32, Loss, S> for SgdUpdateStep<f32, Loss, S> where
   }
 
   fn end_iteration(&mut self, minibatch_sz: usize, loss: &mut Loss) {
-    loss.load_diff_param(&mut self.param_saved);
+    if let Some(GradientMomentum::Nesterov(_)) = self.cfg.momentum {
+      loss.load_diff_param(&mut self.param_saved);
+    }
     loss.store_grad(&mut self.grad);
     self.grad.reshape_mut(self.grad_sz).div_scalar(minibatch_sz as f32);
   }
 
   fn step(&mut self, iter_count: usize, loss: &mut Loss) {
-    /*loss.store_grad(&mut self.grad);
-    self.grad.reshape_mut(self.grad_sz).div_scalar(minibatch_sz as f32);*/
-
     let step_size = match self.cfg.step_size {
       StepSize::Constant(alpha) => {
         alpha
