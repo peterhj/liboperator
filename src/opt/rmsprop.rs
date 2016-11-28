@@ -23,6 +23,33 @@ pub struct RmspropUpdate<T> where T: Copy {
   //_marker:      PhantomData<fn (Loss, S, IoBuf)>,
 }
 
+impl RmspropUpdate<f32> {
+  pub fn new<Loss, S>(cfg: RmspropConfig, loss: &mut Loss) -> RmspropUpdate<f32>
+  where Loss: DiffLoss<S, [f32]> {
+    let grad_sz = loss.diff_param_sz();
+    let mut param = Vec::with_capacity(grad_sz);
+    param.resize(grad_sz, 0.0);
+    let mut grad = Vec::with_capacity(grad_sz);
+    grad.resize(grad_sz, 0.0);
+    let mut grad_var_acc = Vec::with_capacity(grad_sz);
+    grad_var_acc.resize(grad_sz, 0.0);
+    let mut diff_acc = Vec::with_capacity(grad_sz);
+    diff_acc.resize(grad_sz, 0.0);
+    let mut tmp_buf = Vec::with_capacity(grad_sz);
+    tmp_buf.resize(grad_sz, 0.0);
+    RmspropUpdate{
+      cfg:          cfg,
+      grad_sz:      grad_sz,
+      param:        param,
+      grad:         grad,
+      grad_var_acc: grad_var_acc,
+      diff_acc:     diff_acc,
+      tmp_buf:      tmp_buf,
+      //_marker:      PhantomData,
+    }
+  }
+}
+
 impl<Loss, S> GradUpdate<f32, Loss, S, [f32]> for RmspropUpdate<f32> where Loss: DiffLoss<S, [f32]> {
   type Cfg = RmspropConfig;
 

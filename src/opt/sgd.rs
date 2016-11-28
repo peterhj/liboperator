@@ -1,6 +1,7 @@
 use prelude::*;
 
 use densearray::prelude::*;
+use rng::xorshift::*;
 
 use std::marker::{PhantomData};
 
@@ -42,6 +43,10 @@ impl<Loss, S> GradUpdate<f32, Loss, S, [f32]> for SgdUpdate<f32> where Loss: Dif
       diff_acc:     diff_acc,
       //_marker:      PhantomData,
     }
+  }
+
+  fn reset(&mut self, loss: &mut Loss, rng: &mut Xorshiftplus128Rng) {
+    loss.init_param(rng);
   }
 
   fn begin_iteration(&mut self, loss: &mut Loss) {
