@@ -28,3 +28,4 @@ pub use opt::{
   OptWorker, OptStats, CheckpointConfig, CheckpointState, StepSize, GradientMomentum, AdaptiveStepSizeSchedule,
 };
 pub use opt::stochastic::{GradUpdate, StochasticGradWorker};
+pub use timing::{Stopwatch};

@@ -39,6 +39,7 @@ pub struct StochasticGradWorker<T, Update, Loss, S, IoBuf: ?Sized> where T: Copy
   update_step:  Update,
   //param_saved:  Vec<T>,
   //dirty_param:  bool,
+  stopwatch:    Stopwatch,
   _marker:      PhantomData<(T, fn (IoBuf))>,
 }
 
@@ -59,6 +60,7 @@ impl<T, Update, Loss, S, IoBuf: ?Sized> StochasticGradWorker<T, Update, Loss, S,
       update_step:  update, //GradUpdate::initialize(cfg, &mut *loss.borrow_mut()),
       //param_saved:  param_saved,
       //dirty_param:  true,
+      stopwatch:    Stopwatch::new(),
       _marker:      PhantomData,
     }
   }
@@ -68,18 +70,26 @@ impl<T, Update, Loss, S, IoBuf: ?Sized> StochasticGradWorker<T, Update, Loss, S,
   pub fn init(&mut self, rng: &mut Xorshiftplus128Rng) {
     //let mut loss = self.loss.borrow_mut();
     //loss.init_param(rng);
+
+    self.stopwatch.lap();
     self.update_step.reset(&mut *self.loss.borrow_mut(), rng);
+    self.stopwatch.lap();
+    println!("DEBUG: sg: init: {:.6}", self.stopwatch.elapsed());
+
     //loss.store_diff_param(&mut self.param_saved);
     //self.update_step.load_param(&mut self.param_saved);
     //self.dirty_param = false;
   }
 
   pub fn step(&mut self, samples: &mut Iterator<Item=S>) {
+    self.stopwatch.lap();
     self.cache.clear();
     for sample in samples.take(self.minibatch_sz) {
       self.cache.push(sample);
     }
     assert_eq!(self.minibatch_sz, self.cache.len());
+    self.stopwatch.lap();
+    println!("DEBUG: sg: step: fetching samples: {:.6}", self.stopwatch.elapsed());
 
     let mut loss = self.loss.borrow_mut();
     self.update_step.begin_iteration(&mut *loss);
@@ -91,13 +101,25 @@ impl<T, Update, Loss, S, IoBuf: ?Sized> StochasticGradWorker<T, Update, Loss, S,
     for batch in 0 .. num_batches {
       let batch_start = batch * self.batch_sz;
       let batch_end = min((batch + 1) * self.batch_sz, self.minibatch_sz);
+      self.stopwatch.lap();
       loss.load_batch(&self.cache[batch_start .. batch_end]);
+      self.stopwatch.lap();
+      println!("DEBUG: sg: step: loading batch: {:.6}", self.stopwatch.elapsed());
+      self.stopwatch.lap();
       loss.forward(OpPhase::Learning);
+      self.stopwatch.lap();
+      println!("DEBUG: sg: step: forward: {:.6}", self.stopwatch.elapsed());
+      self.stopwatch.lap();
       loss.backward();
+      self.stopwatch.lap();
+      println!("DEBUG: sg: step: backward: {:.6}", self.stopwatch.elapsed());
     }
+    self.stopwatch.lap();
     self.update_step.end_iteration(self.minibatch_sz, &mut *loss);
     self.update_step.step(self.iter_count, &mut *loss);
     loss.update_nondiff_param(self.iter_count);
+    self.stopwatch.lap();
+    println!("DEBUG: sg: step: update: {:.6}", self.stopwatch.elapsed());
 
     self.iter_count += 1;
     self.cache.clear();
