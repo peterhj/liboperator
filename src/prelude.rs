@@ -8,11 +8,13 @@ pub use super::{
 pub type OperatorNode = OperatorStack;
 pub use data::{
   SampleExtractInput,
+  SampleParallelExtractInput,
   SampleInputShape,
   SampleItem,
   SampleSharedSliceDataKey,
   SampleExtractInputKey,
   SampleSharedExtractInputKey,
+  SharedSampleParallelExtractInputKey,
   SampleInputShapeKey,
   SampleInputShape3dKey,
   SampleClassLabelKey,

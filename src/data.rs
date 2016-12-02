@@ -1,12 +1,14 @@
+use densearray::prelude::*;
 use sharedmem::{SharedSlice};
-use typemap::{TypeMap, Key};
+use typemap::{ShareMap, TypeMap, Key};
 
 use std::marker::{PhantomData};
 use std::rc::{Rc};
 use std::sync::{Arc};
 
-pub trait SampleExtractInput<U: ?Sized> {
+pub trait SampleExtractInput<U: ?Sized>: Send + Sync {
   fn extract_input(&self, output: &mut U) -> Result<usize, ()>;
+  fn parallel_extract_input(&self, output: &mut U) -> Result<usize, ()> { unimplemented!(); }
 }
 
 impl SampleExtractInput<[u8]> for Vec<u8> {
@@ -56,6 +58,13 @@ impl SampleExtractInput<[f32]> for SharedSlice<u8> {
     }
     Ok(len)
   }
+
+  fn parallel_extract_input(&self, output: &mut [f32]) -> Result<usize, ()> {
+    let len = self.len();
+    assert!(len <= output.len());
+    output.reshape_mut(len).parallel_cast(self.reshape(len));
+    Ok(len)
+  }
 }
 
 impl SampleExtractInput<[f32]> for SharedSlice<f32> {
@@ -65,13 +74,43 @@ impl SampleExtractInput<[f32]> for SharedSlice<f32> {
     output[ .. len].copy_from_slice(&*self);
     Ok(len)
   }
+
+  fn parallel_extract_input(&self, output: &mut [f32]) -> Result<usize, ()> {
+    let len = self.len();
+    assert!(len <= output.len());
+    output.reshape_mut(len).parallel_copy(self.reshape(len));
+    Ok(len)
+  }
 }
 
-pub trait SampleExtractTaggedInput<U: ?Sized> {
+pub trait SampleParallelExtractInput<U: ?Sized>: Send + Sync {
+  fn parallel_extract_input(&self, output: &mut U) -> Result<usize, ()>;
+}
+
+impl SampleParallelExtractInput<[f32]> for SharedSlice<u8> {
+  fn parallel_extract_input(&self, output: &mut [f32]) -> Result<usize, ()> {
+    let len = self.len();
+    assert!(len <= output.len());
+    output.reshape_mut(len).parallel_cast(self.reshape(len));
+    Ok(len)
+  }
+}
+
+impl SampleParallelExtractInput<[f32]> for SharedSlice<f32> {
+  fn parallel_extract_input(&self, output: &mut [f32]) -> Result<usize, ()> {
+    let len = self.len();
+    assert!(len <= output.len());
+    //output[ .. len].copy_from_slice(&*self);
+    output.reshape_mut(len).parallel_copy(self.reshape(len));
+    Ok(len)
+  }
+}
+
+pub trait SampleExtractTaggedInput<U: ?Sized>: Send + Sync {
   fn extract_tagged_input(&self, tag: usize, output: &mut U) -> Result<usize, ()>;
 }
 
-pub trait SampleInputShape<Shape> where Shape: PartialEq + Eq {
+pub trait SampleInputShape<Shape>: Send + Sync where Shape: PartialEq + Eq {
   fn input_shape(&self) -> Option<Shape>;
 }
 
@@ -82,13 +121,15 @@ impl SampleInputShape<(usize, usize, usize)> for (usize, usize, usize) {
 }
 
 pub struct SampleItem {
-  pub kvs:  TypeMap,
+  //pub kvs:  TypeMap,
+  pub kvs:  ShareMap,
 }
 
 impl SampleItem {
   pub fn new() -> SampleItem {
     SampleItem{
-      kvs:  TypeMap::new(),
+      //kvs:  TypeMap::new(),
+      kvs:  TypeMap::custom(),
     }
   }
 }
@@ -106,7 +147,8 @@ pub struct SampleExtractInputKey<U: ?Sized> where U: 'static {
 }
 
 impl<U: ?Sized> Key for SampleExtractInputKey<U> where U: 'static {
-  type Value = Rc<SampleExtractInput<U>>;
+  //type Value = Rc<SampleExtractInput<U>>;
+  type Value = Arc<SampleExtractInput<U>>;
 }
 
 pub struct SampleSharedExtractInputKey<U: ?Sized> where U: 'static {
@@ -117,12 +159,21 @@ impl<U: ?Sized> Key for SampleSharedExtractInputKey<U> where U: 'static {
   type Value = Arc<SampleExtractInput<U>>;
 }
 
+pub struct SharedSampleParallelExtractInputKey<U: ?Sized> where U: 'static {
+  _marker:  PhantomData<U>,
+}
+
+impl<U: ?Sized> Key for SharedSampleParallelExtractInputKey<U> where U: 'static {
+  type Value = Arc<SampleParallelExtractInput<U>>;
+}
+
 pub struct SampleExtractTaggedInputKey<U: ?Sized> where U: 'static {
   _marker:  PhantomData<U>,
 }
 
 impl<U: ?Sized> Key for SampleExtractTaggedInputKey<U> where U: 'static {
-  type Value = Rc<SampleExtractTaggedInput<U>>;
+  //type Value = Rc<SampleExtractTaggedInput<U>>;
+  type Value = Arc<SampleExtractTaggedInput<U>>;
 }
 
 pub struct SampleInputShapeKey<Shape> where Shape: 'static + PartialEq + Eq {
@@ -130,7 +181,8 @@ pub struct SampleInputShapeKey<Shape> where Shape: 'static + PartialEq + Eq {
 }
 
 impl<Shape> Key for SampleInputShapeKey<Shape> where Shape: 'static + PartialEq + Eq {
-  type Value = Rc<SampleInputShape<Shape>>;
+  //type Value = Rc<SampleInputShape<Shape>>;
+  type Value = Arc<SampleInputShape<Shape>>;
 }
 
 pub struct SampleSharedInputShapeKey<Shape> where Shape: 'static + PartialEq + Eq {

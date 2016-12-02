@@ -105,16 +105,13 @@ impl<T, Update, Loss, S, IoBuf: ?Sized> StochasticGradWorker<T, Update, Loss, S,
       loss.load_batch(&self.cache[batch_start .. batch_end]);
       self.stopwatch.lap();
       println!("DEBUG: sg: step: loading batch: {:.6}", self.stopwatch.elapsed());
-      self.stopwatch.lap();
       loss.forward(OpPhase::Learning);
       self.stopwatch.lap();
       println!("DEBUG: sg: step: forward: {:.6}", self.stopwatch.elapsed());
-      self.stopwatch.lap();
       loss.backward();
       self.stopwatch.lap();
       println!("DEBUG: sg: step: backward: {:.6}", self.stopwatch.elapsed());
     }
-    self.stopwatch.lap();
     self.update_step.end_iteration(self.minibatch_sz, &mut *loss);
     self.update_step.step(self.iter_count, &mut *loss);
     loss.update_nondiff_param(self.iter_count);
@@ -153,6 +150,104 @@ impl<T, Update, Loss, S, IoBuf: ?Sized> StochasticGradWorker<T, Update, Loss, S,
 }
 
 impl<Update, Loss, S, IoBuf: ?Sized> StochasticGradWorker<f32, Update, Loss, S, IoBuf> where Update: GradUpdate<f32, Loss, S, IoBuf>, Loss: DiffLoss<S, IoBuf> + LossReport<ClassLossStats> {
+  pub fn update_stats(&self, stats: &mut ClassLossStats) {
+    let mut operator = self.loss.borrow_mut();
+    operator.update_stats(self.iter_count, stats);
+  }
+}
+
+pub struct FastStochasticGradWorker<T, Update, Loss, S, IoBuf: ?Sized> where T: Copy, Update: GradUpdate<T, Loss, S, IoBuf>, Loss: DiffLoss<S, IoBuf> {
+  minibatch_sz: usize,
+  grad_sz:      usize,
+  iter_count:   usize,
+  loss:         Rc<RefCell<Loss>>,
+  cache:        Vec<S>,
+  update_step:  Update,
+  stopwatch:    Stopwatch,
+  _marker:      PhantomData<(T, fn (IoBuf))>,
+}
+
+impl<T, Update, Loss, S, IoBuf: ?Sized> FastStochasticGradWorker<T, Update, Loss, S, IoBuf> where T: Copy + Zero, Update: GradUpdate<T, Loss, S, IoBuf>, Loss: DiffLoss<S, IoBuf> {
+  pub fn new(minibatch_sz: usize, /*cfg: Update::Cfg,*/ update: Update, loss: Rc<RefCell<Loss>>) -> FastStochasticGradWorker<T, Update, Loss, S, IoBuf> {
+    let grad_sz = loss.borrow_mut().diff_param_sz();
+    let cache = Vec::with_capacity(minibatch_sz);
+    FastStochasticGradWorker{
+      minibatch_sz: minibatch_sz,
+      grad_sz:      grad_sz,
+      iter_count:   0,
+      loss:         loss.clone(),
+      cache:        cache,
+      update_step:  update,
+      stopwatch:    Stopwatch::new(),
+      _marker:      PhantomData,
+    }
+  }
+}
+
+impl<T, Update, Loss, S, IoBuf: ?Sized> FastStochasticGradWorker<T, Update, Loss, S, IoBuf> where T: Copy, Update: GradUpdate<T, Loss, S, IoBuf>, Loss: DiffLoss<S, IoBuf> {
+  pub fn init(&mut self, rng: &mut Xorshiftplus128Rng) {
+    self.stopwatch.lap();
+    self.update_step.reset(&mut *self.loss.borrow_mut(), rng);
+    self.stopwatch.lap();
+    println!("DEBUG: sg: init: {:.6}", self.stopwatch.elapsed());
+  }
+
+  pub fn step(&mut self, samples: &mut Iterator<Item=S>) {
+    self.stopwatch.lap();
+    self.cache.clear();
+    for sample in samples.take(self.minibatch_sz) {
+      self.cache.push(sample);
+    }
+    assert_eq!(self.minibatch_sz, self.cache.len());
+    self.stopwatch.lap();
+    println!("DEBUG: sg: step: fetching samples: {:.6}", self.stopwatch.elapsed());
+
+    let mut loss = self.loss.borrow_mut();
+    self.update_step.begin_iteration(&mut *loss);
+    loss.save_rng_state();
+    loss.next_iteration();
+    loss.reset_loss();
+    loss.reset_grad();
+    {
+      self.stopwatch.lap();
+      loss.load_batch(&self.cache);
+      self.stopwatch.lap();
+      println!("DEBUG: sg: step: loading batch: {:.6}", self.stopwatch.elapsed());
+      loss.forward(OpPhase::Learning);
+      self.stopwatch.lap();
+      println!("DEBUG: sg: step: forward: {:.6}", self.stopwatch.elapsed());
+    }
+    self.update_step.end_iteration(self.minibatch_sz, &mut *loss);
+    self.update_step.step(self.iter_count, &mut *loss);
+    loss.update_nondiff_param(self.iter_count);
+    self.stopwatch.lap();
+    println!("DEBUG: sg: step: backward + update: {:.6}", self.stopwatch.elapsed());
+
+    self.iter_count += 1;
+    self.cache.clear();
+  }
+
+  pub fn eval(&mut self, epoch_sz: usize, samples: &mut Iterator<Item=S>) {
+    let mut loss = self.loss.borrow_mut();
+    loss.reset_loss();
+    self.cache.clear();
+    for mut sample in samples.take(epoch_sz) {
+      self.cache.push(sample);
+      if self.cache.len() == self.minibatch_sz {
+        loss.load_batch(&self.cache);
+        loss.forward(OpPhase::Inference);
+        self.cache.clear();
+      }
+    }
+    if self.cache.len() > 0 {
+      loss.load_batch(&self.cache);
+      loss.forward(OpPhase::Inference);
+      self.cache.clear();
+    }
+  }
+}
+
+impl<Update, Loss, S, IoBuf: ?Sized> FastStochasticGradWorker<f32, Update, Loss, S, IoBuf> where Update: GradUpdate<f32, Loss, S, IoBuf>, Loss: DiffLoss<S, IoBuf> + LossReport<ClassLossStats> {
   pub fn update_stats(&self, stats: &mut ClassLossStats) {
     let mut operator = self.loss.borrow_mut();
     operator.update_stats(self.iter_count, stats);

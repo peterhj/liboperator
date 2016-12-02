@@ -29,6 +29,7 @@ pub mod stochastic;
 pub struct CheckpointConfig {
   pub prefix:   PathBuf,
   pub trace:    bool,
+  pub rank:     Option<usize>,
 }
 
 pub struct CheckpointState {
@@ -49,7 +50,7 @@ impl CheckpointState {
   pub fn with_fields(cfg: CheckpointConfig, fields: &str) -> CheckpointState {
     let delay_s = thread_rng().gen_range(0, 2);
     let delay_ns = thread_rng().gen_range(100_000_000, 500_000_000);
-    sleep(Duration::new(delay_s, delay_ns));
+    //sleep(Duration::new(delay_s, delay_ns));
     create_dir_all(&cfg.prefix).ok();
     loop {
       let mut lo_idx = Some(0);
@@ -66,7 +67,11 @@ impl CheckpointState {
           _ => unreachable!(),
         }
         let mut config_path = PathBuf::from(&cfg.prefix);
-        let mut config_filename = format!("config.{}", idx);
+        let mut config_filename = if let Some(rank) = cfg.rank {
+          format!("config.{}.{}", idx, rank)
+        } else {
+          format!("config.{}", idx)
+        };
         config_path.push(&config_filename);
         if config_path.exists() {
           match (lo_idx, hi_idx) {
@@ -95,12 +100,16 @@ impl CheckpointState {
 
       let delay_s = thread_rng().gen_range(0, 2);
       let delay_ns = thread_rng().gen_range(100_000_000, 500_000_000);
-      sleep(Duration::new(delay_s, delay_ns));
+      //sleep(Duration::new(delay_s, delay_ns));
       let mut cfg_f = None;
       let mut trace_f = None;
       let mut valid_f = None;
       let mut config_path = PathBuf::from(&cfg.prefix);
-      let mut config_filename = format!("config.{}", idx);
+      let mut config_filename = if let Some(rank) = cfg.rank {
+        format!("config.{}.{}", idx, rank)
+      } else {
+        format!("config.{}", idx)
+      };
       config_path.push(&config_filename);
       if config_path.exists() {
         continue;
@@ -115,7 +124,12 @@ impl CheckpointState {
       }
       if cfg.trace {
         let mut train_path = PathBuf::from(&cfg.prefix);
-        let mut train_filename = format!("train.log.{}", idx);
+        //let mut train_filename = format!("train.log.{}", idx);
+        let mut train_filename = if let Some(rank) = cfg.rank {
+          format!("train.log.{}.{}", idx, rank)
+        } else {
+          format!("train.log.{}", idx)
+        };
         train_path.push(&train_filename);
         assert!(!train_path.exists());
         let mut f = File::create(&train_path).unwrap();
@@ -123,7 +137,12 @@ impl CheckpointState {
         trace_f = Some(f);
 
         let mut valid_path = PathBuf::from(&cfg.prefix);
-        let mut valid_filename = format!("valid.log.{}", idx);
+        //let mut valid_filename = format!("valid.log.{}", idx);
+        let mut valid_filename = if let Some(rank) = cfg.rank {
+          format!("valid.log.{}.{}", idx, rank)
+        } else {
+          format!("valid.log.{}", idx)
+        };
         valid_path.push(&valid_filename);
         assert!(!valid_path.exists());
         let mut f = File::create(&valid_path).unwrap();
@@ -199,9 +218,28 @@ pub enum StepSize {
   Constant(f32),
   Custom{init_step: f32, steps: Vec<(usize, f32)>},
   Decay{init_step: f32, step_decay: f32, decay_iters: usize},
+  LinearDecay{init_step: f32, max_iters: usize},
   Adaptive{init_step: f32, test_iters: usize, epoch_iters: usize, sched: AdaptiveStepSizeSchedule},
   BacktrackingLineSearch{decay: f32, c: f32},
   //WeakWolfeLineSearch,
+}
+
+impl StepSize {
+  pub fn at_iter(&self, iter_count: usize) -> f32 {
+    match self {
+      &StepSize::Constant(alpha) => {
+        alpha
+      }
+      &StepSize::Decay{init_step, step_decay, decay_iters} => {
+        let num_decays = iter_count / decay_iters;
+        init_step * step_decay.powi(num_decays as i32)
+      }
+      &StepSize::LinearDecay{init_step, max_iters} => {
+        init_step * (0.0_f32.max(1.0 - (iter_count as f32) / (max_iters as f32)))
+      }
+      _ => unimplemented!(),
+    }
+  }
 }
 
 #[derive(Clone, Copy, Debug)]

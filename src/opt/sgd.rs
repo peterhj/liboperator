@@ -67,7 +67,7 @@ impl<Loss, S> GradUpdate<f32, Loss, S, [f32]> for SgdUpdate<f32> where Loss: Dif
   }
 
   fn step(&mut self, iter_count: usize, loss: &mut Loss) {
-    let step_size = match self.cfg.step_size {
+    /*let step_size = match self.cfg.step_size {
       StepSize::Constant(alpha) => {
         alpha
       }
@@ -76,7 +76,8 @@ impl<Loss, S> GradUpdate<f32, Loss, S, [f32]> for SgdUpdate<f32> where Loss: Dif
         init_step * step_decay.powi(num_decays as i32)
       }
       _ => unimplemented!(),
-    };
+    };*/
+    let step_size = self.cfg.step_size.at_iter(iter_count);
     loss.store_diff_param(&mut self.param);
     if self.cfg.momentum.is_some() {
       let mu = self.cfg.momentum.unwrap().mu();
