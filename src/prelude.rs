@@ -1,22 +1,27 @@
 pub use super::{
   //DiffOperator, DiffOperatorInput, DiffOperatorOutput, DiffOperatorIo,
   OpCapability, OpPhase, Regularization,
-  OperatorStack, /*OperatorNode,*/ Operator, /*NewDiffOperator,*/ /*NewDiffOperator2, NewDiffOpCast, NewDiffLoss*/ /*DiffOperatorRma,*/ /*DiffLossRma,*/
-  DiffOperator, DiffOperatorIo, DiffLoss,
+  NodeStack, /*OperatorNode,*/ Operator, /*NewDiffOperator,*/ /*NewDiffOperator2, NewDiffOpCast, NewDiffLoss*/ /*DiffOperatorRma,*/ /*DiffLossRma,*/
+  Intermediate,
+  Param, ParamSet, ParamAllocator, DefaultParamAllocator, ParamBlock,
+  Var, VarAllocator, VarBlock,
+  DiffOperator, DiffOperatorData, DiffOperatorIo, DiffLoss, DiffNLLLoss,
   LossReport, ClassLossStats, RegressLossStats,
 };
-pub type OperatorNode = OperatorStack;
+pub type OperatorNode = NodeStack;
 pub use data::{
   SampleExtractInput,
-  SampleParallelExtractInput,
+  //SampleParallelExtractInput,
   SampleInputShape,
   SampleItem,
+  SharedSampleItem,
   SampleSharedSliceDataKey,
   SampleExtractInputKey,
   SampleSharedExtractInputKey,
-  SharedSampleParallelExtractInputKey,
+  //SharedSampleParallelExtractInputKey,
   SampleInputShapeKey,
-  SampleInputShape3dKey,
+  SharedSampleInputShapeKey,
+  //SampleInputShape3dKey,
   SampleClassLabelKey,
   SampleRegressTargetKey,
   SampleWeightKey,

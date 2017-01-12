@@ -12,6 +12,7 @@ rand = "*"
 rustc-serialize = "*"
 csv = "*"
 densearray = "^0.1"
+#lazy_static = "*"
 sharedmem = "^0.1"
 rng = "^0.1"
 typemap-alt = { path = "../rust-typemap" }
