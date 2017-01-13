@@ -22,12 +22,12 @@ extern crate rustc_serialize;
 use rng::xorshift::{Xorshiftplus128Rng};
 
 use rand::{Rng};
-use std::cell::{Cell, RefCell};
+use std::cell::{Cell, RefCell, Ref, RefMut};
 use std::collections::{HashSet};
 use std::io::{Read, Write};
 use std::marker::{PhantomData};
 use std::ops::{Deref, DerefMut};
-use std::rc::{Rc};
+use std::rc::{Rc, Weak};
 use std::sync::atomic::{ATOMIC_U64_INIT, AtomicU64, Ordering};
 
 pub mod data;
@@ -375,22 +375,38 @@ pub trait ParamAllocator<A> {
   fn allocate_param(&self) -> A;
 }
 
-pub struct DefaultParamAllocator<A, F> where A: 'static, F: 'static + Fn() -> A {
-  f:    F,
-  _m:   PhantomData<fn () -> A>,
+pub struct ParamBuf<A> {
+  block:    RefCell<Option<Weak<ParamBlock<A>>>>,
+  inner:    RefCell<Option<A>>,
 }
 
-impl<A, F> DefaultParamAllocator<A, F> where A: 'static, F: 'static + Fn() -> A {
-//impl<A, F> DefaultParamAllocator<A, F> where F: Fn() -> A {
-  //pub fn new(f: F) -> Rc<ParamAllocator<A>> {
-  pub fn new(f: F) -> Rc<DefaultParamAllocator<A, F>> {
-    Rc::new(DefaultParamAllocator{f: f, _m: PhantomData})
+impl<A> ParamBuf<A> {
+  pub fn default() -> ParamBuf<A> {
+    ParamBuf{
+      block:    RefCell::new(None),
+      inner:    RefCell::new(None),
+    }
   }
-}
 
-impl<A, F> ParamAllocator<A> for DefaultParamAllocator<A, F> where F: Fn() -> A {
-  fn allocate_param(&self) -> A {
-    (self.f)()
+  pub fn set_parent(&self, block: Weak<ParamBlock<A>>) {
+    *self.block.borrow_mut() = Some(block);
+  }
+
+  pub fn as_ref(&self) -> Ref<A> {
+    assert!(self.inner.borrow().is_some());
+    Ref::map(self.inner.borrow(), |inner| inner.as_ref().unwrap())
+  }
+
+  pub fn as_mut(&self) -> RefMut<A> {
+    if self.inner.borrow().is_none() {
+      assert!(self.block.borrow().is_some());
+      let maybe_block = Weak::upgrade(self.block.borrow().as_ref().unwrap());
+      assert!(maybe_block.is_some());
+      let block = maybe_block.unwrap();
+      let mut inner = self.inner.borrow_mut();
+      *inner = Some(block.allocator.allocate_param());
+    }
+    RefMut::map(self.inner.borrow_mut(), |inner| inner.as_mut().unwrap())
   }
 }
 
@@ -398,145 +414,51 @@ pub struct ParamBlock<A> {
   node:         NodeStack,
   param:        Param,
   allocator:    Rc<ParamAllocator<A>>,
-  pub val:      A,
-  pub grad:     Option<A>,
-  pub val2:     Option<A>,
-  pub grad2:    Option<A>,
-  pub r_dir:    Option<A>,
-  pub r_grad:   Option<A>,
-  pub mask:     bool,
-}
-
-impl<A> Deref for ParamBlock<A> {
-  type Target = A;
-
-  fn deref(&self) -> &A {
-    &self.val
-  }
-}
-
-impl<A> DerefMut for ParamBlock<A> {
-  fn deref_mut(&mut self) -> &mut A {
-    &mut self.val
-  }
+  pub val:      ParamBuf<A>,
+  pub grad:     ParamBuf<A>,
+  pub val2:     ParamBuf<A>,
+  pub grad2:    ParamBuf<A>,
+  pub r_dir:    ParamBuf<A>,
+  pub r_grad:   ParamBuf<A>,
+  //pub mask:     bool,
 }
 
 impl<A> ParamBlock<A> {
-  //pub fn new<F>(cap: OpCapability, builder: F) -> Rc<RefCell<ParamBlock<A>>> where F: Fn() -> A {
-  pub fn new(allocator: Rc<ParamAllocator<A>>) -> Rc<RefCell<ParamBlock<A>>> {
-    let val = allocator.allocate_param();
-    Rc::new(RefCell::new(ParamBlock{
+  pub fn new(allocator: Rc<ParamAllocator<A>>) -> Rc<ParamBlock<A>> {
+    let block = Rc::new(ParamBlock{
       node:         NodeStack::default(),
       param:        Param::new(),
       allocator:    allocator,
-      //val:      builder(),
-      /*grad:     if cap.enable_backward() {
-        Some(builder())
-      } else {
-        None
-      },*/
-      val:      val,
-      grad:     None,
-      val2:     None,
-      grad2:    None,
-      /*r_dir:    if cap.enable_r_forward() {
-        Some(builder())
-      } else {
-        None
-      },
-      r_grad:   if cap.enable_r_backward() {
-        Some(builder())
-      } else {
-        None
-      },*/
-      r_dir:    None,
-      r_grad:   None,
-      mask:     false,
-    }))
+      val:      ParamBuf::default(),
+      grad:     ParamBuf::default(),
+      val2:     ParamBuf::default(),
+      grad2:    ParamBuf::default(),
+      r_dir:    ParamBuf::default(),
+      r_grad:   ParamBuf::default(),
+      //mask:     false,
+    });
+    let weak_block = Rc::downgrade(&block);
+    block.val.set_parent(weak_block);
+    let weak_block = Rc::downgrade(&block);
+    block.grad.set_parent(weak_block);
+    let weak_block = Rc::downgrade(&block);
+    block.val2.set_parent(weak_block);
+    let weak_block = Rc::downgrade(&block);
+    block.grad2.set_parent(weak_block);
+    let weak_block = Rc::downgrade(&block);
+    block.r_dir.set_parent(weak_block);
+    let weak_block = Rc::downgrade(&block);
+    block.r_grad.set_parent(weak_block);
+    block
   }
 
-  pub fn _maybe_alloc_grad(&self) {
-    if self.grad.is_none() {
-    }
-  }
-
-  pub fn _maybe_alloc_val2(&self) {
-    if self.grad.is_none() {
-    }
-  }
-
-  pub fn _maybe_alloc_grad2(&self) {
-    if self.grad.is_none() {
-    }
-  }
-
-  pub fn _maybe_alloc_r_dir(&self) {
-    if self.grad.is_none() {
-    }
-  }
-
-  pub fn _maybe_alloc_r_grad(&self) {
-    if self.grad.is_none() {
-    }
-  }
-
-  pub fn grad(&self) -> &A {
-    self._maybe_alloc_grad();
-    self.grad.as_ref().unwrap()
-  }
-
-  pub fn grad_mut(&mut self) -> &mut A {
-    self._maybe_alloc_grad();
-    self.grad.as_mut().unwrap()
-  }
-
-  pub fn val2(&self) -> &A {
-    self._maybe_alloc_val2();
-    self.val2.as_ref().unwrap()
-  }
-
-  pub fn val2_mut(&mut self) -> &mut A {
-    self._maybe_alloc_val2();
-    self.val2.as_mut().unwrap()
-  }
-
-  pub fn grad2(&self) -> &A {
-    self._maybe_alloc_grad();
-    self.grad2.as_ref().unwrap()
-  }
-
-  pub fn grad2_mut(&mut self) -> &mut A {
-    self._maybe_alloc_grad2();
-    self.grad2.as_mut().unwrap()
-  }
-
-  pub fn r_dir(&self) -> &A {
-    self._maybe_alloc_r_dir();
-    self.r_dir.as_ref().unwrap()
-  }
-
-  pub fn r_dir_mut(&mut self) -> &mut A {
-    self._maybe_alloc_r_dir();
-    self.r_dir.as_mut().unwrap()
-  }
-
-  pub fn r_grad(&self) -> &A {
-    self._maybe_alloc_r_grad();
-    self.r_grad.as_ref().unwrap()
-  }
-
-  pub fn r_grad_mut(&mut self) -> &mut A {
-    self._maybe_alloc_r_grad();
-    self.r_grad.as_mut().unwrap()
-  }
-
-  pub fn reset_mask(&mut self) {
+  /*pub fn reset_mask(&mut self) {
     self.mask = false;
   }
 
   pub fn set_mask(&mut self, mask: bool) {
     self.mask = mask;
-  }
+  }*/
 }
 
 impl<A> Operator for ParamBlock<A> {
@@ -583,19 +505,51 @@ pub trait VarAllocator<A> {
   fn allocate_var(&self) -> A;
 }
 
+pub struct VarBuf<A> {
+  block:    Option<Weak<RefCell<VarBlock<A>>>>,
+  inner:    RefCell<Option<A>>,
+}
+
+impl<A> VarBuf<A> {
+  pub fn default() -> VarBuf<A> {
+    VarBuf{
+      block:    None,
+      inner:    RefCell::new(None),
+    }
+  }
+}
+
 pub struct VarBlock<A> {
   node:         NodeStack,
   var:          Var,
   allocator:    Rc<VarAllocator<A>>,
-  pub val:      Option<A>,
-  pub grad:     Option<A>,
-  pub grad2:    Option<A>,
-  pub r_val:    Option<A>,
-  pub r_grad:   Option<A>,
-  pub mask:     bool,
+  pub batch_sz: Cell<usize>,
+  pub val:      VarBuf<A>,
+  pub grad:     VarBuf<A>,
+  pub grad2:    VarBuf<A>,
+  pub r_val:    VarBuf<A>,
+  pub r_grad:   VarBuf<A>,
+  //pub mask:     bool,
 }
 
 impl<A> VarBlock<A> {
+}
+
+pub struct DefaultParamAllocator<A, F> where A: 'static, F: 'static + Fn() -> A {
+  f:    F,
+  _m:   PhantomData<fn () -> A>,
+}
+
+impl<A, F> DefaultParamAllocator<A, F> where A: 'static, F: 'static + Fn() -> A {
+  pub fn new(f: F) -> Rc<DefaultParamAllocator<A, F>> {
+    Rc::new(DefaultParamAllocator{f: f, _m: PhantomData})
+  }
+}
+
+impl<A, F> ParamAllocator<A> for DefaultParamAllocator<A, F> where F: Fn() -> A {
+  fn allocate_param(&self) -> A {
+    (self.f)()
+  }
 }
 
 pub trait DiffOperatorData<S> {
