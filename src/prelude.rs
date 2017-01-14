@@ -3,8 +3,9 @@ pub use super::{
   OpCapability, OpPhase, Regularization,
   NodeStack, /*OperatorNode,*/ Operator, /*NewDiffOperator,*/ /*NewDiffOperator2, NewDiffOpCast, NewDiffLoss*/ /*DiffOperatorRma,*/ /*DiffLossRma,*/
   Intermediate,
-  Param, ParamSet, ParamAllocator, DefaultParamAllocator, ParamBlock,
+  ParamRef, ParamSet, ParamAllocator, ParamBlock,
   Var, VarAllocator, VarBlock,
+  DefaultParamAllocator, DefaultVarAllocator,
   DiffOperator, DiffOperatorData, DiffOperatorIo, DiffLoss, DiffNLLLoss,
   LossReport, ClassLossStats, RegressLossStats,
 };
