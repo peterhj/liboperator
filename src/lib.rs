@@ -22,6 +22,7 @@ extern crate rustc_serialize;
 use rng::xorshift::{Xorshiftplus128Rng};
 
 use rand::{Rng};
+use std::any::{Any};
 use std::cell::{Cell, RefCell, Ref, RefMut};
 use std::collections::{HashSet};
 use std::io::{Read, Write};
@@ -658,6 +659,11 @@ impl<A, F> VarAllocator<A> for DefaultVarAllocator<A, F> where F: Fn() -> A {
 
 pub trait DiffOperatorData<S> {
   fn _load_batch(&mut self, _samples: &[S]) {}
+  fn _cache_batch(&mut self, _keys: &[usize], _cache: &Any) { unimplemented!(); }
+  fn _reload_cached_batch(&mut self, _keys: &[usize], _cache: &Any) { unimplemented!(); }
+  /*fn _push_cached_batch(&mut self, _samples: &[S]) {}
+  fn _set_cached_batch_weights(&mut self, _weights: &[f32]) {}
+  fn _load_cached_batch(&mut self, _idxs: &[usize]) {}*/
 }
 
 pub trait DiffOperatorIo<IoBuf: ?Sized> {
@@ -676,7 +682,7 @@ pub trait DiffOperatorBuf<Src, Sink> {
 }
 
 //pub trait NewDiffOperator<S>: Operator {
-pub trait DiffOperator<S, IoBuf: ?Sized>: Operator /*+ DiffOperatorData<S>*/ + DiffOperatorIo<IoBuf> {
+pub trait DiffOperator<S, IoBuf: ?Sized>: Operator + DiffOperatorData<S> + DiffOperatorIo<IoBuf> {
   fn _traverse_fwd(&mut self, _epoch: u64 /*Epoch*/, _apply: &mut FnMut(&mut DiffOperator<S, IoBuf>));
   fn _traverse_bwd(&mut self, _epoch: u64 /*Epoch*/, _apply: &mut FnMut(&mut DiffOperator<S, IoBuf>));
 
@@ -698,10 +704,10 @@ pub trait DiffOperator<S, IoBuf: ?Sized>: Operator /*+ DiffOperatorData<S>*/ + D
 
   fn _next_iteration(&mut self) {}
   fn _reset_batch(&mut self) {}
-  fn _load_batch(&mut self, _samples: &[S]) {}
+  /*fn _load_batch(&mut self, _samples: &[S]) {}
   fn _push_cached_batch(&mut self, _samples: &[S]) {}
   fn _set_cached_batch_weights(&mut self, _weights: &[f32]) {}
-  fn _load_cached_batch(&mut self, _idxs: &[usize]) {}
+  fn _load_cached_batch(&mut self, _idxs: &[usize]) {}*/
 
   //fn _reset_state(&mut self) {}
   fn _init_param(&mut self, _rng: &mut Xorshiftplus128Rng) {}
@@ -791,7 +797,9 @@ pub trait DiffNLLLoss<S, IoBuf: ?Sized>: DiffLoss<S, IoBuf> {
 pub trait DiffLoss<S, IoBuf: ?Sized>: DiffOperator<S, IoBuf> {
   fn reset_loss(&mut self);
   fn store_loss(&mut self) -> f32;
-  fn set_grad_weight_with_r_loss(&mut self) {}
+  fn set_jacobian_target_with_r_loss(&mut self) { unimplemented!(); }
+  fn r_gauss_newton_transform(&mut self) { unimplemented!(); }
+
   fn _store_accuracy(&mut self) -> usize { 0 }
   fn _get_pred(&mut self) -> &[f32] { unimplemented!(); }
   fn _get_target(&mut self) -> &[f32] { unimplemented!(); }
@@ -880,7 +888,7 @@ pub trait DiffLoss<S, IoBuf: ?Sized>: DiffOperator<S, IoBuf> {
     self._traverse_fwd(epoch, &mut |op| op._load_batch(samples));
   }
 
-  fn push_cached_batch(&mut self, samples: &[S]) {
+  /*fn push_cached_batch(&mut self, samples: &[S]) {
     let epoch = self._next();
     self._traverse_fwd(epoch, &mut |op| op._push_cached_batch(samples));
   }
@@ -893,7 +901,7 @@ pub trait DiffLoss<S, IoBuf: ?Sized>: DiffOperator<S, IoBuf> {
   fn load_cached_batch(&mut self, idxs: &[usize]) {
     let epoch = self._next();
     self._traverse_fwd(epoch, &mut |op| op._load_cached_batch(idxs));
-  }
+  }*/
 
   fn save_rng_state(&mut self) {
     let epoch = self._next();
@@ -945,6 +953,11 @@ pub trait DiffLoss<S, IoBuf: ?Sized>: DiffOperator<S, IoBuf> {
   fn r_forward(&mut self) {
     let epoch = self._next();
     self._traverse_bwd(epoch, &mut |op| op._r_forward());
+  }
+
+  fn r_backward(&mut self) {
+    let epoch = self._next();
+    self._traverse_bwd(epoch, &mut |op| op._r_backward());
   }
 }
 
