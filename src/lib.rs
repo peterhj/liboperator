@@ -150,18 +150,18 @@ impl BatchNr {
   }
 }
 
-pub struct BatchNrSet(HashSet<BatchNr>);
+/*pub struct BatchNrSet(HashSet<BatchNr>);
 
 impl BatchNrSet {
   pub fn new() -> BatchNrSet {
     BatchNrSet(HashSet::new())
   }
-}
+}*/
 
 #[derive(Clone, Copy, Default)]
 pub struct Epoch {
-  pub node_id:  NodeId,
   pub epoch_nr: EpochNr,
+  pub root:     NodeId,
 }
 
 pub struct NodeStackEntry {
@@ -196,7 +196,7 @@ impl NodeStack {
   /// The traversal epoch is uniquely identified by the current node ID and the
   /// the (incremented) epoch number.
   ///
-  /// TODO(20160112):
+  /// TODO(20170112):
   /// Currently the epoch is a hack: take a 16-bit node ID and a 48-bit epoch
   /// number and OR them together. A better `Epoch` uses two separate 64-bit
   /// words for each.
@@ -244,7 +244,7 @@ impl NodeStack {
     if entries.len() == 10 {
       println!("WARNING: operator stack depth is 10, probably a bug!");
     }
-    // FIXME(20160112): should check to make sure the traversal is acyclic.
+    // FIXME(20170112): should check to make sure the traversal is acyclic.
     if !entries.is_empty() && epoch == entries.last().unwrap().epoch {
       entries.last_mut().unwrap().count += 1;
     } else {
@@ -266,7 +266,7 @@ impl NodeStack {
   }
 }
 
-// XXX(20160112): `NodeCell` is deprecated; use `NodeStack` instead.
+// XXX(20170112): `NodeCell` is deprecated; use `NodeStack` instead.
 #[derive(Clone, Default)]
 pub struct NodeCell {
   pub curr_epoch:   Cell<u64>,
@@ -428,6 +428,11 @@ impl ParamSet {
     self.inner.contains(param)
   }
 
+  pub fn union(&mut self, other_params: &ParamSet) {
+    self.inner.union(&other_params.inner);
+    // FIXME(20170115): union the masks too?
+  }
+
   pub fn reset_masks(&mut self) {
     self.mask.clear();
   }
@@ -447,6 +452,7 @@ pub trait ParamAllocator<A> {
 }
 
 pub struct ParamBuf<A> {
+  batch:    Cell<BatchNr>,
   block:    RefCell<Option<Weak<ParamBlock<A>>>>,
   inner:    RefCell<Option<A>>,
 }
@@ -454,6 +460,7 @@ pub struct ParamBuf<A> {
 impl<A> ParamBuf<A> {
   pub fn default() -> ParamBuf<A> {
     ParamBuf{
+      batch:    Cell::new(BatchNr::default()),
       block:    RefCell::new(None),
       inner:    RefCell::new(None),
     }
@@ -485,7 +492,7 @@ pub struct ParamBlock<A> {
   allocator:    Rc<ParamAllocator<A>>,
   //pub node:     NodeStack,
   pub param:    ParamRef,
-  pub batch:    RefCell<BatchNrSet>,
+  pub batch:    Cell<BatchNr>,
   pub val:      ParamBuf<A>,
   pub grad:     ParamBuf<A>,
   pub val2:     ParamBuf<A>,
@@ -500,7 +507,7 @@ impl<A> ParamBlock<A> {
       allocator:    allocator,
       //node:     NodeStack::default(),
       param:    ParamRef::new(),
-      batch:    RefCell::new(BatchNrSet::new()),
+      batch:    Cell::new(BatchNr::default()),
       val:      ParamBuf::default(),
       grad:     ParamBuf::default(),
       val2:     ParamBuf::default(),
@@ -539,8 +546,13 @@ pub trait VarAllocator<A> {
   fn allocate_var(&self) -> A;
 }
 
+/*pub trait VarData {
+  fn validate(&self, ) -> bool;
+}*/
+
 pub struct VarBuf<A> {
-  epoch:    Cell<u64>,
+  //epoch:    Cell<u64>,
+  batch:    Cell<BatchNr>,
   block:    RefCell<Option<Weak<VarBlock<A>>>>,
   inner:    RefCell<Option<A>>,
 }
@@ -548,7 +560,8 @@ pub struct VarBuf<A> {
 impl<A> VarBuf<A> {
   pub fn default() -> VarBuf<A> {
     VarBuf{
-      epoch:    Cell::new(0),
+      //epoch:    Cell::new(0),
+      batch:    Cell::new(BatchNr::default()),
       block:    RefCell::new(None),
       inner:    RefCell::new(None),
     }
@@ -558,13 +571,17 @@ impl<A> VarBuf<A> {
     *self.block.borrow_mut() = Some(block);
   }
 
-  pub fn match_epoch(&self, test_epoch: u64) -> bool {
-    self.epoch.get() == test_epoch
+  /*pub fn match_batch(&self, test_batch: BatchNr) -> bool {
+    self.batch.get() == test_batch
   }
 
-  pub fn update_epoch(&self, new_epoch: u64) {
-    self.epoch.set(new_epoch);
+  pub fn update_batch(&self, new_batch: BatchNr) {
+    self.batch.set(new_batch);
   }
+
+  pub fn clear_batch(&self) {
+    self.batch.set(BatchNr(0));
+  }*/
 
   pub fn as_ref(&self) -> Ref<A> {
     assert!(self.inner.borrow().is_some());
@@ -587,7 +604,7 @@ impl<A> VarBuf<A> {
 pub struct VarBlock<A> {
   allocator:    Rc<VarAllocator<A>>,
   pub var:      Var,
-  pub batch:    RefCell<BatchNrSet>,
+  pub batch:    Cell<BatchNr>,
   pub batch_sz: Cell<usize>,
   pub val:      VarBuf<A>,
   pub grad:     VarBuf<A>,
@@ -601,7 +618,7 @@ impl<A> VarBlock<A> {
     let block = Rc::new(VarBlock{
       allocator:    allocator,
       var:      Var::new(),
-      batch:    RefCell::new(BatchNrSet::new()),
+      batch:    Cell::new(BatchNr::default()),
       batch_sz: Cell::new(0),
       val:      VarBuf::default(),
       grad:     VarBuf::default(),
@@ -673,13 +690,19 @@ pub trait DiffOperatorIo<IoBuf: ?Sized> {
   fn _store_nondiff_param(&mut self, _offset: usize, _param_writer: &mut IoBuf) -> usize { 0 }
   fn _store_grad(&mut self, _offset: usize, _grad_writer: &mut IoBuf) -> usize { 0 }
   fn _load_direction(&mut self, _offset: usize, _direction_reader: &mut IoBuf) -> usize { 0 }
-  fn _load_param(&mut self, _params: &mut ParamSet, _offset: usize, _param_reader: &mut IoBuf) -> usize { 0 }
+
+  /*fn _load_param(&mut self, _params: &mut ParamSet, _offset: usize, _param_reader: &mut IoBuf) -> usize { 0 }
+  fn _store_param(&mut self, _params: &mut ParamSet, _offset: usize, _param_writer: &mut IoBuf) -> usize { 0 }
+  fn _store_grad(&mut self, _params: &mut ParamSet, _offset: usize, _grad_writer: &mut IoBuf) -> usize { 0 }
+  fn _store_grad2(&mut self, _params: &mut ParamSet, _offset: usize, _grad2_writer: &mut IoBuf) -> usize { 0 }
+  fn _load_r_dir(&mut self, _params: &mut ParamSet, _offset: usize, _r_dir_reader: &mut IoBuf) -> usize { 0 }
+  fn _store_r_grad(&mut self, _params: &mut ParamSet, _offset: usize, _r_grad_writer: &mut IoBuf) -> usize { 0 }*/
 }
 
-pub trait DiffOperatorBuf<Src, Sink> {
+/*pub trait DiffOperatorBuf<Src, Sink> {
   fn _src(&self, idx: usize) -> Src;
   fn _sink(&self, idx: usize) -> Sink;
-}
+}*/
 
 //pub trait NewDiffOperator<S>: Operator {
 pub trait DiffOperator<S, IoBuf: ?Sized>: Operator + DiffOperatorData<S> + DiffOperatorIo<IoBuf> {
@@ -697,10 +720,13 @@ pub trait DiffOperator<S, IoBuf: ?Sized>: Operator + DiffOperatorData<S> + DiffO
   fn _nondiff_params(&self) -> ParamSet { ParamSet::new() }
   fn _param_sz(&self, _params: &mut ParamSet) -> usize { 0 }
 
-  //fn _load_rng_state(&mut self, offset: usize, state: &[u64]) -> usize { 0 }
-  //fn _store_rng_state(&mut self, offset: usize, state: &mut Vec<u64>) -> usize { 0 }
   fn _save_rng_state(&mut self) {}
   fn _restore_rng_state(&mut self) {}
+  fn _load_rng_state(&mut self, offset: usize, state: &[u64]) -> usize { 0 }
+  fn _store_rng_state(&mut self, state: &mut Vec<u64>) -> usize { 0 }
+
+  fn _reset_state(&mut self) {}
+  fn _reset_accumulators(&mut self) {}
 
   fn _next_iteration(&mut self) {}
   fn _reset_batch(&mut self) {}
@@ -873,6 +899,15 @@ pub trait DiffLoss<S, IoBuf: ?Sized>: DiffOperator<S, IoBuf> {
     offset
   }
 
+  fn load_direction(&mut self, dir_reader: &mut IoBuf) -> usize {
+    let epoch = self._next();
+    let mut offset = 0;
+    self._traverse_bwd(epoch, &mut |op| {
+      offset += op._load_direction(offset, dir_reader);
+    });
+    offset
+  }
+
   fn next_iteration(&mut self) {
     let epoch = self._next();
     self._traverse_fwd(epoch, &mut |op| op._next_iteration());
@@ -952,7 +987,7 @@ pub trait DiffLoss<S, IoBuf: ?Sized>: DiffOperator<S, IoBuf> {
 
   fn r_forward(&mut self) {
     let epoch = self._next();
-    self._traverse_bwd(epoch, &mut |op| op._r_forward());
+    self._traverse_fwd(epoch, &mut |op| op._r_forward());
   }
 
   fn r_backward(&mut self) {
