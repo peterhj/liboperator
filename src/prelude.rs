@@ -25,6 +25,7 @@ pub use data::{
   //SampleInputShape3dKey,
   SampleClassLabelKey,
   SampleRegressTargetKey,
+  SampleVectorTargetKey,
   SampleWeightKey,
 };
 pub use data::Shape::*;

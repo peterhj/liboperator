@@ -245,6 +245,12 @@ impl Key for SampleRegressTargetKey {
   type Value = f32;
 }
 
+pub struct SampleVectorTargetKey {}
+
+impl Key for SampleVectorTargetKey {
+  type Value = Vec<f32>;
+}
+
 pub struct SampleWeightKey {}
 
 impl Key for SampleWeightKey {

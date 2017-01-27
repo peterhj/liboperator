@@ -676,8 +676,8 @@ impl<A, F> VarAllocator<A> for DefaultVarAllocator<A, F> where F: Fn() -> A {
 
 pub trait DiffOperatorData<S> {
   fn _load_batch(&mut self, _samples: &[S]) {}
-  fn _cache_batch(&mut self, _keys: &[usize], _cache: &Any) { unimplemented!(); }
-  fn _reload_cached_batch(&mut self, _keys: &[usize], _cache: &Any) { unimplemented!(); }
+  fn _cache_batch(&mut self, _keys: &[u64], _cache: &mut Any) { unimplemented!(); }
+  fn _reload_cached_batch(&mut self, _keys: &[u64], _cache: &mut Any) { unimplemented!(); }
   /*fn _push_cached_batch(&mut self, _samples: &[S]) {}
   fn _set_cached_batch_weights(&mut self, _weights: &[f32]) {}
   fn _load_cached_batch(&mut self, _idxs: &[usize]) {}*/
@@ -690,6 +690,7 @@ pub trait DiffOperatorIo<IoBuf: ?Sized> {
   fn _store_nondiff_param(&mut self, _offset: usize, _param_writer: &mut IoBuf) -> usize { 0 }
   fn _store_grad(&mut self, _offset: usize, _grad_writer: &mut IoBuf) -> usize { 0 }
   fn _load_direction(&mut self, _offset: usize, _direction_reader: &mut IoBuf) -> usize { 0 }
+  fn _store_r_grad(&mut self, _offset: usize, _grad_writer: &mut IoBuf) -> usize { 0 }
 
   /*fn _load_param(&mut self, _params: &mut ParamSet, _offset: usize, _param_reader: &mut IoBuf) -> usize { 0 }
   fn _store_param(&mut self, _params: &mut ParamSet, _offset: usize, _param_writer: &mut IoBuf) -> usize { 0 }
@@ -740,12 +741,16 @@ pub trait DiffOperator<S, IoBuf: ?Sized>: Operator + DiffOperatorData<S> + DiffO
   //fn _init_param(&mut self) {}
   fn _update_nondiff_param(&mut self, _iter_nr: usize) {}
   fn _reset_grad(&mut self) {}
+  fn _reset_r_grad(&mut self) {}
+  fn _reset_weight(&mut self) {}
 
   fn _clock(&mut self) { unimplemented!(); }
   fn _forward(&mut self, phase: OpPhase);
   fn _backward(&mut self);
+  fn _backward_gauss_newton(&mut self) { self._backward(); }
   fn _backward2(&mut self) { unimplemented!(); }
   fn _r_forward(&mut self) { unimplemented!(); }
+  fn _r_forward_gauss_newton(&mut self) { self._r_forward(); }
   fn _r_backward(&mut self) { unimplemented!(); }
 
   fn _dump_input(&mut self) -> Vec<u8> { unimplemented!(); }
@@ -822,11 +827,14 @@ pub trait DiffNLLLoss<S, IoBuf: ?Sized>: DiffLoss<S, IoBuf> {
 
 pub trait DiffLoss<S, IoBuf: ?Sized>: DiffOperator<S, IoBuf> {
   fn reset_loss(&mut self);
-  fn store_loss(&mut self) -> f32;
+  fn store_loss(&mut self);
+  fn get_loss(&mut self) -> f32;
   fn set_jacobian_target_with_r_loss(&mut self) { unimplemented!(); }
   fn r_gauss_newton_transform(&mut self) { unimplemented!(); }
 
-  fn _store_accuracy(&mut self) -> usize { 0 }
+  fn _store_accuracy(&mut self) { unimplemented!() }
+  fn _get_accuracy(&mut self) -> usize { unimplemented!(); }
+  fn _store_pred(&mut self) { unimplemented!(); }
   fn _get_pred(&mut self) -> &[f32] { unimplemented!(); }
   fn _get_target(&mut self) -> &[f32] { unimplemented!(); }
   fn _get_delta(&mut self) -> &[f32] { unimplemented!(); }
@@ -908,6 +916,16 @@ pub trait DiffLoss<S, IoBuf: ?Sized>: DiffOperator<S, IoBuf> {
     offset
   }
 
+  fn store_r_grad(&mut self, grad_writer: &mut IoBuf) -> usize {
+    //grad_writer.reset();
+    let epoch = self._next();
+    let mut offset = 0;
+    self._traverse_bwd(epoch, &mut |op| {
+      offset += op._store_r_grad(offset, grad_writer);
+    });
+    offset
+  }
+
   fn next_iteration(&mut self) {
     let epoch = self._next();
     self._traverse_fwd(epoch, &mut |op| op._next_iteration());
@@ -921,6 +939,16 @@ pub trait DiffLoss<S, IoBuf: ?Sized>: DiffOperator<S, IoBuf> {
   fn load_batch(&mut self, samples: &[S]) {
     let epoch = self._next();
     self._traverse_fwd(epoch, &mut |op| op._load_batch(samples));
+  }
+
+  fn cache_batch(&mut self, keys: &[u64], cache: &mut Any) {
+    let epoch = self._next();
+    self._traverse_fwd(epoch, &mut |op| op._cache_batch(keys, cache));
+  }
+
+  fn reload_cached_batch(&mut self, keys: &[u64], cache: &mut Any) {
+    let epoch = self._next();
+    self._traverse_fwd(epoch, &mut |op| op._reload_cached_batch(keys, cache));
   }
 
   /*fn push_cached_batch(&mut self, samples: &[S]) {
@@ -970,6 +998,16 @@ pub trait DiffLoss<S, IoBuf: ?Sized>: DiffOperator<S, IoBuf> {
     self._traverse_bwd(epoch, &mut |op| op._reset_grad());
   }
 
+  fn reset_r_grad(&mut self) {
+    let epoch = self._next();
+    self._traverse_bwd(epoch, &mut |op| op._reset_r_grad());
+  }
+
+  fn reset_weight(&mut self) {
+    let epoch = self._next();
+    self._traverse_bwd(epoch, &mut |op| op._reset_weight());
+  }
+
   fn forward(&mut self, phase: OpPhase) {
     let epoch = self._next();
     self._traverse_fwd(epoch, &mut |op| op._forward(phase));
@@ -980,6 +1018,11 @@ pub trait DiffLoss<S, IoBuf: ?Sized>: DiffOperator<S, IoBuf> {
     self._traverse_bwd(epoch, &mut |op| op._backward());
   }
 
+  fn backward_gauss_newton(&mut self) {
+    let epoch = self._next();
+    self._traverse_bwd(epoch, &mut |op| op._backward_gauss_newton());
+  }
+
   fn backward2(&mut self) {
     let epoch = self._next();
     self._traverse_bwd(epoch, &mut |op| op._backward2());
@@ -988,6 +1031,11 @@ pub trait DiffLoss<S, IoBuf: ?Sized>: DiffOperator<S, IoBuf> {
   fn r_forward(&mut self) {
     let epoch = self._next();
     self._traverse_fwd(epoch, &mut |op| op._r_forward());
+  }
+
+  fn r_forward_gauss_newton(&mut self) {
+    let epoch = self._next();
+    self._traverse_fwd(epoch, &mut |op| op._r_forward_gauss_newton());
   }
 
   fn r_backward(&mut self) {
